@@ -59,7 +59,10 @@
         </div>
         <button data-act="grid" class="text-btn toggle is-on" title="グリッド表示">⊞ グリッド</button>
         <div class="spacer"></div>
-        <button data-act="theme" class="text-btn" title="テーマ切替">◐ テーマ</button>
+        <div class="menu-wrap">
+          <button data-act="theme-menu" class="text-btn" title="配色テーマ">◐ テーマ ▾</button>
+          <div class="menu" id="theme-menu" hidden><!-- populated by JS --></div>
+        </div>
         <button data-act="save" class="text-btn" title="JSON保存 (Ctrl+S)">保存</button>
         <button data-act="load" class="text-btn" title="JSON読み込み">開く</button>
         <div class="menu-wrap">

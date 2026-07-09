@@ -6,7 +6,7 @@ export async function initBackground() {
     THREE = await import('three');
   } catch (e) {
     console.warn('[bg] three.js unavailable — using static gradient.', e);
-    return { setTheme() {} };
+    return { setTheme() {}, setPalette() {} };
   }
 
   const canvas = document.getElementById('bg-canvas');
@@ -115,13 +115,15 @@ export async function initBackground() {
 
   return {
     setTheme(theme) {
-      if (theme === 'light') {
-        ptsMat.color.set('#2f6fe0'); ptsMat.opacity = 0.55;
-        linkMat.color.set('#12a3bb'); linkMat.opacity = 0.10;
-      } else {
-        ptsMat.color.set('#4d8dff'); ptsMat.opacity = 0.9;
-        linkMat.color.set('#38d5c0'); linkMat.opacity = 0.16;
-      }
+      if (theme === 'light') this.setPalette('#2f6fe0', '#12a3bb', 'light');
+      else this.setPalette('#4d8dff', '#38d5c0', 'dark');
+    },
+    // set particle + link colors to match the active palette
+    setPalette(pointHex, linkHex, mode) {
+      ptsMat.color.set(pointHex);
+      linkMat.color.set(linkHex);
+      if (mode === 'light') { ptsMat.opacity = 0.55; linkMat.opacity = 0.10; }
+      else { ptsMat.opacity = 0.9; linkMat.opacity = 0.16; }
     },
   };
 }

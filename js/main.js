@@ -12,11 +12,51 @@ const editor = new Editor(svg);
 window.__editor = editor; // debug / tooling handle
 
 /* ---------------- theme + background ---------------- */
-let bg = { setTheme() {} };
-const savedTheme = localStorage.getItem('sysarch:theme') || 'dark';
-document.documentElement.dataset.theme = savedTheme;
-initBackground().then((b) => { bg = b; bg.setTheme(currentTheme()); });
-function currentTheme() { return document.documentElement.dataset.theme || 'dark'; }
+let bg = { setTheme() {}, setPalette() {} };
+
+const THEMES = [
+  { id: 'midnight-blueprint', name: 'Midnight Blueprint', tag: '技術ブルー',       mode: 'dark',  pt: '#4d8dff', ln: '#38d5c0' },
+  { id: 'abyssal-teal',       name: 'Abyssal Teal',       tag: '深海ティール',     mode: 'dark',  pt: '#2dd4bf', ln: '#6ab7ff' },
+  { id: 'violet-noir',        name: 'Violet Noir',        tag: '夜想の紫',         mode: 'dark',  pt: '#b06bff', ln: '#ff6ea9' },
+  { id: 'graphite-ember',     name: 'Graphite Ember',     tag: '暖色グラファイト', mode: 'dark',  pt: '#e0a04b', ln: '#d97b5c' },
+  { id: 'light',              name: 'ライト',             tag: '明るい配色',       mode: 'light', pt: '#2f6fe0', ln: '#12a3bb' },
+];
+
+function resolveInitialTheme() {
+  const saved = localStorage.getItem('sysarch:theme');
+  if (saved === 'dark') return 'midnight-blueprint';      // migrate old value
+  if (THEMES.some((t) => t.id === saved)) return saved;
+  return 'midnight-blueprint';
+}
+let themeId = resolveInitialTheme();
+
+function applyThemeDom(id) {
+  const t = THEMES.find((x) => x.id === id) || THEMES[0];
+  const root = document.documentElement;
+  if (t.mode === 'light') { root.dataset.theme = 'light'; delete root.dataset.variant; }
+  else { root.dataset.theme = 'dark'; if (t.id === 'midnight-blueprint') delete root.dataset.variant; else root.dataset.variant = t.id; }
+  localStorage.setItem('sysarch:theme', id);
+  themeId = id;
+}
+
+function applyTheme(id) {
+  applyThemeDom(id);
+  const t = THEMES.find((x) => x.id === id) || THEMES[0];
+  editor.render();               // recolor the diagram for the new palette
+  bg.setPalette(t.pt, t.ln, t.mode);
+  buildThemeMenu();
+}
+
+function buildThemeMenu() {
+  const m = $('#theme-menu');
+  if (!m) return;
+  m.innerHTML = THEMES.map((t) =>
+    `<button data-theme-id="${t.id}">${t.id === themeId ? '● ' : ''}${t.name} <em>${t.tag}</em></button>`).join('');
+}
+
+applyThemeDom(themeId);          // set attributes early to avoid a flash
+buildThemeMenu();
+initBackground().then((b) => { bg = b; const t = THEMES.find((x) => x.id === themeId) || THEMES[0]; bg.setPalette(t.pt, t.ln, t.mode); });
 
 /* ---------------- palette ---------------- */
 function buildPalette() {
@@ -85,7 +125,7 @@ document.querySelector('.topbar-actions').addEventListener('click', (e) => {
     case 'zoom-out': editor.zoomBy(1 / 1.2); break;
     case 'zoom-fit': editor.fitView(); break;
     case 'grid': { const on = editor.toggleGrid(); btn.classList.toggle('is-on', on); break; }
-    case 'theme': toggleTheme(); break;
+    case 'theme-menu': { const m = $('#theme-menu'); m.hidden = !m.hidden; $('#export-menu').hidden = true; break; }
     case 'save': saveFile(); break;
     case 'load': $('#file-input').click(); break;
     case 'export': toggleExportMenu(); break;
@@ -110,16 +150,15 @@ function toggleExportMenu() {
   m.hidden = !m.hidden;
 }
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.menu-wrap')) $('#export-menu').hidden = true;
+  if (!e.target.closest('.menu-wrap')) { $('#export-menu').hidden = true; $('#theme-menu').hidden = true; }
 });
 
-function toggleTheme() {
-  const next = currentTheme() === 'dark' ? 'light' : 'dark';
-  document.documentElement.dataset.theme = next;
-  localStorage.setItem('sysarch:theme', next);
-  editor.render();      // recolor SVG content for the new theme
-  bg.setTheme(next);
-}
+$('#theme-menu').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-theme-id]'); if (!b) return;
+  applyTheme(b.dataset.themeId);
+  $('#theme-menu').hidden = true;
+  toast(`テーマ: ${THEMES.find((t) => t.id === b.dataset.themeId)?.name || ''}`);
+});
 
 /* ---------------- inspector ---------------- */
 const inspEmpty = $('#insp-empty');
