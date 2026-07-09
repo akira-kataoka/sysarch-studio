@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=10';
-import { typeInfo } from './nodes.js?v=10';
-import { BRAND_ICONS } from './brands.js?v=10';
+import { ICONS } from './icons.js?v=11';
+import { typeInfo } from './nodes.js?v=11';
+import { BRAND_ICONS } from './brands.js?v=11';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -14,6 +14,7 @@ export class Editor {
     this.state = { nodes: {}, edges: {}, order: [], counter: 0 };
     this.view = { tx: 0, ty: 0, k: 1 };
     this.sel = { kind: null, id: null };
+    this.selNodes = new Set();   // multi-selected node ids
     this.listeners = {};
     this.showGrid = true;
     this._hist = []; this._future = [];
@@ -139,19 +140,21 @@ export class Editor {
   selected() { const { kind, id } = this.sel; if (!kind) return null; return (kind === 'node' ? this.state.nodes : this.state.edges)[id]; }
 
   deleteSelected() {
-    const { kind, id } = this.sel;
-    if (!kind) return;
-    if (kind === 'node') {
-      delete this.state.nodes[id];
-      this.state.order = this.state.order.filter((x) => x !== id);
+    if (this.selNodes.size) {
+      const ids = this.selNodes;
+      this.state.order = this.state.order.filter((x) => !ids.has(x));
+      for (const id of ids) delete this.state.nodes[id];
       for (const [eid, e] of Object.entries(this.state.edges))
-        if (e.from === id || e.to === id) delete this.state.edges[eid];
-    } else {
-      delete this.state.edges[id];
+        if (ids.has(e.from) || ids.has(e.to)) delete this.state.edges[eid];
+      this.select(null, null);
+      this._pushHistory(); this.render();
+      return;
     }
-    this.select(null, null);
-    this._pushHistory();
-    this.render();
+    if (this.sel.kind === 'edge') {
+      delete this.state.edges[this.sel.id];
+      this.select(null, null);
+      this._pushHistory(); this.render();
+    }
   }
 
   duplicateSelected() {
@@ -171,36 +174,74 @@ export class Editor {
 
   // ---------- selection ----------
   select(kind, id) {
+    this.selNodes = (kind === 'node' && id) ? new Set([id]) : new Set();
     this.sel = { kind, id };
+    this._refreshSelectionClasses();
+    this.emit('select', this.sel);
+  }
+  selectNodes(ids) {
+    this.selNodes = new Set(ids);
+    const arr = [...this.selNodes];
+    this.sel = arr.length ? { kind: 'node', id: arr[arr.length - 1] } : { kind: null, id: null };
+    this._refreshSelectionClasses();
+    this.emit('select', this.sel);
+  }
+  toggleNode(id) {
+    if (this.selNodes.has(id)) this.selNodes.delete(id); else this.selNodes.add(id);
+    const arr = [...this.selNodes];
+    this.sel = arr.length ? { kind: 'node', id: arr[arr.length - 1] } : { kind: null, id: null };
     this._refreshSelectionClasses();
     this.emit('select', this.sel);
   }
 
   _refreshSelectionClasses() {
+    const accent = (this._c && this._c.accent) || '#7c5cff';
     this.$nodes.querySelectorAll('.node-g').forEach((g) =>
-      g.classList.toggle('is-selected', this.sel.kind === 'node' && g.dataset.id === this.sel.id));
+      g.classList.toggle('is-selected', this.selNodes.has(g.dataset.id)));
     this.$edges.querySelectorAll('.edge-g').forEach((g) =>
       g.classList.toggle('is-selected', this.sel.kind === 'edge' && g.dataset.id === this.sel.id));
     // visual: selected edge stroke
     this.$edges.querySelectorAll('.edge-g').forEach((g) => {
       const on = g.classList.contains('is-selected');
       const vis = g.querySelector('.edge-line');
-      const accent = (this._c && this._c.accent) || '#7c5cff';
       if (vis) { vis.setAttribute('stroke-width', on ? 3 : 2); vis.style.filter = on ? `drop-shadow(0 0 6px ${accent})` : ''; vis.setAttribute('stroke', on ? accent : (g.dataset.color || (this._c && this._c.edge) || '#7f8aa8')); }
     });
-    // selection outline for node
-    this.$nodes.querySelectorAll('.sel-ring').forEach((r) => r.remove());
-    if (this.sel.kind === 'node') {
-      const g = this.$nodes.querySelector(`.node-g[data-id="${this.sel.id}"]`);
-      const n = this.state.nodes[this.sel.id];
-      if (g && n) {
-        const ring = el('rect', { class: 'sel-ring', x: -4, y: -4, width: n.w + 8, height: n.h + 8, rx: 18, fill: 'none', stroke: (this._c && this._c.accent) || '#7c5cff', 'stroke-width': 2, 'stroke-dasharray': '6 5', opacity: 0.9 });
-        g.insertBefore(ring, g.firstChild);
-        if (['card', 'plain', 'banner', 'group', 'band'].includes(n.shape || 'card')) {
-          g.appendChild(el('rect', { class: 'resize-handle', x: n.w - 6, y: n.h - 6, width: 14, height: 14, rx: 3, fill: (this._c && this._c.accent) || '#7c5cff', stroke: '#fff', 'stroke-width': 1.5, 'data-id': n.id }));
-        }
+    // selection outlines for all selected nodes (+ resize handle only when exactly one)
+    this.$nodes.querySelectorAll('.sel-ring, .resize-handle').forEach((r) => r.remove());
+    for (const id of this.selNodes) {
+      const g = this.$nodes.querySelector(`.node-g[data-id="${id}"]`);
+      const n = this.state.nodes[id];
+      if (!g || !n) continue;
+      const ring = el('rect', { class: 'sel-ring', x: -4, y: -4, width: n.w + 8, height: n.h + 8, rx: 18, fill: 'none', stroke: accent, 'stroke-width': 2, 'stroke-dasharray': '6 5', opacity: 0.9 });
+      g.insertBefore(ring, g.firstChild);
+      if (this.selNodes.size === 1 && ['card', 'plain', 'banner', 'group', 'band'].includes(n.shape || 'card')) {
+        g.appendChild(el('rect', { class: 'resize-handle', x: n.w - 6, y: n.h - 6, width: 14, height: 14, rx: 3, fill: accent, stroke: '#fff', 'stroke-width': 1.5, 'data-id': n.id }));
       }
     }
+  }
+
+  // ---------- multi-node arrange ----------
+  _selArr() { return [...this.selNodes].map((id) => this.state.nodes[id]).filter(Boolean); }
+  alignSelected(mode) {
+    const ns = this._selArr(); if (ns.length < 2) return;
+    const minL = Math.min(...ns.map((n) => n.x)), maxR = Math.max(...ns.map((n) => n.x + n.w));
+    const minT = Math.min(...ns.map((n) => n.y)), maxB = Math.max(...ns.map((n) => n.y + n.h));
+    const cx = (minL + maxR) / 2, cy = (minT + maxB) / 2;
+    for (const n of ns) {
+      if (mode === 'left') n.x = snap(minL);
+      else if (mode === 'right') n.x = snap(maxR - n.w);
+      else if (mode === 'hcenter') n.x = snap(cx - n.w / 2);
+      else if (mode === 'top') n.y = snap(minT);
+      else if (mode === 'bottom') n.y = snap(maxB - n.h);
+      else if (mode === 'vcenter') n.y = snap(cy - n.h / 2);
+    }
+    this._pushHistory(); this.render();
+  }
+  distributeSelected(axis) {
+    const ns = this._selArr(); if (ns.length < 3) return;
+    if (axis === 'h') { ns.sort((a, b) => a.x - b.x); const step = (ns[ns.length - 1].x - ns[0].x) / (ns.length - 1); ns.forEach((n, i) => { if (i > 0 && i < ns.length - 1) n.x = snap(ns[0].x + step * i); }); }
+    else { ns.sort((a, b) => a.y - b.y); const step = (ns[ns.length - 1].y - ns[0].y) / (ns.length - 1); ns.forEach((n, i) => { if (i > 0 && i < ns.length - 1) n.y = snap(ns[0].y + step * i); }); }
+    this._pushHistory(); this.render();
   }
 
   // ---------- render ----------
@@ -438,6 +479,12 @@ export class Editor {
       }
       if (nodeEl) {
         const id = nodeEl.dataset.id;
+        if (e.shiftKey) { this.toggleNode(id); return; }   // shift-click adds/removes from selection
+        if (this.selNodes.has(id) && this.selNodes.size > 1) {   // drag the whole multi-selection
+          const w = this.screenToWorld(e.clientX, e.clientY);
+          drag = { mode: 'multi', ox: w.x, oy: w.y, moved: false, items: [...this.selNodes].map((nid) => ({ id: nid, x0: this.state.nodes[nid].x, y0: this.state.nodes[nid].y })) };
+          capture(e.pointerId); return;
+        }
         this.select('node', id);
         const n = this.state.nodes[id];
         const w = this.screenToWorld(e.clientX, e.clientY);
@@ -452,6 +499,14 @@ export class Editor {
         return;
       }
       if (edgeEl) { this.select('edge', edgeEl.dataset.id); return; }
+      // shift + empty drag → marquee select
+      if (e.shiftKey) {
+        const w = this.screenToWorld(e.clientX, e.clientY);
+        drag = { mode: 'marquee', x0: w.x, y0: w.y, add: [...this.selNodes] };
+        this._marquee = el('rect', { class: 'marquee', x: w.x, y: w.y, width: 0, height: 0, fill: mix((this._c && this._c.accent) || '#4d8dff', 12), stroke: (this._c && this._c.accent) || '#4d8dff', 'stroke-width': 1 / this.view.k, 'stroke-dasharray': `${4 / this.view.k} ${3 / this.view.k}`, 'pointer-events': 'none' });
+        this.$overlay.appendChild(this._marquee);
+        capture(e.pointerId); return;
+      }
       // empty → pan + deselect
       this.select(null, null);
       drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, tx: this.view.tx, ty: this.view.ty };
@@ -498,6 +553,22 @@ export class Editor {
             this._updateNodeEdges(c.id);
           }
         }
+      } else if (drag.mode === 'multi') {
+        const w = this.screenToWorld(e.clientX, e.clientY);
+        const ddx = snap(w.x - drag.ox), ddy = snap(w.y - drag.oy);
+        drag.moved = true;
+        for (const it of drag.items) {
+          const m = this.state.nodes[it.id]; if (!m) continue;
+          m.x = it.x0 + ddx; m.y = it.y0 + ddy;
+          const cg = this.$nodes.querySelector(`.node-g[data-id="${it.id}"]`);
+          if (cg) cg.setAttribute('transform', `translate(${m.x} ${m.y})`);
+          this._updateNodeEdges(it.id);
+        }
+      } else if (drag.mode === 'marquee') {
+        const w = this.screenToWorld(e.clientX, e.clientY);
+        const x = Math.min(drag.x0, w.x), y = Math.min(drag.y0, w.y);
+        this._marquee.setAttribute('x', x); this._marquee.setAttribute('y', y);
+        this._marquee.setAttribute('width', Math.abs(w.x - drag.x0)); this._marquee.setAttribute('height', Math.abs(w.y - drag.y0));
       } else if (drag.mode === 'resize') {
         const w = this.screenToWorld(e.clientX, e.clientY);
         const n = this.state.nodes[drag.id];
@@ -518,7 +589,20 @@ export class Editor {
       this._showGuides(null);
       if (!drag) { svg.classList.remove('panning', 'linking'); return; }
       if (drag.mode === 'node' && drag.moved) { this.render(); this._pushHistory(); }
+      if (drag.mode === 'multi' && drag.moved) { this.render(); this._pushHistory(); }
       if (drag.mode === 'resize' && drag.moved) { this._pushHistory(); }
+      if (drag.mode === 'marquee') {
+        const mx = +this._marquee.getAttribute('x'), my = +this._marquee.getAttribute('y');
+        const mw = +this._marquee.getAttribute('width'), mh = +this._marquee.getAttribute('height');
+        this._marquee.remove(); this._marquee = null;
+        const hit = new Set(drag.add);
+        if (mw > 3 || mh > 3) {
+          for (const n of Object.values(this.state.nodes)) {
+            if (n.x < mx + mw && n.x + n.w > mx && n.y < my + mh && n.y + n.h > my) hit.add(n.id);
+          }
+        }
+        this.selectNodes([...hit]);
+      }
       if (drag.mode === 'link') {
         this._tempLink?.remove(); this._tempLink = null;
         const tgt = document.elementFromPoint(e.clientX, e.clientY);
@@ -628,11 +712,10 @@ export class Editor {
     this._pushHistory(); this.render(); this.fitView();
   }
 
-  // move selected node by a delta (keyboard nudge)
+  // move all selected nodes by a delta (keyboard nudge)
   nudge(dx, dy) {
-    if (this.sel.kind !== 'node') return;
-    const n = this.state.nodes[this.sel.id]; if (!n) return;
-    n.x += dx; n.y += dy;
+    if (!this.selNodes.size) return;
+    for (const id of this.selNodes) { const n = this.state.nodes[id]; if (n) { n.x += dx; n.y += dy; } }
     this.render(); this._pushHistory();
   }
 

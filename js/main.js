@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=10';
-import { Editor } from './editor.js?v=10';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=10';
-import { iconSvg } from './icons.js?v=10';
-import { BRAND_ICONS } from './brands.js?v=10';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=10';
+import { initBackground } from './background.js?v=11';
+import { Editor } from './editor.js?v=11';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=11';
+import { iconSvg } from './icons.js?v=11';
+import { BRAND_ICONS } from './brands.js?v=11';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=11';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -221,10 +221,47 @@ editor.on('select', renderInspector);
 editor.on('editlabel', () => { const el = inspBody.querySelector('#f-label'); if (el) { el.focus(); el.select(); } });
 
 function renderInspector(sel) {
+  if (editor.selNodes && editor.selNodes.size >= 2) { renderMultiInspector(); return; }
   if (!sel || !sel.kind) { inspEmpty.hidden = false; inspBody.hidden = true; inspBody.innerHTML = ''; return; }
   inspEmpty.hidden = true; inspBody.hidden = false;
   if (sel.kind === 'node') renderNodeInspector(editor.state.nodes[sel.id]);
   else renderEdgeInspector(editor.state.edges[sel.id]);
+}
+
+function renderMultiInspector() {
+  inspEmpty.hidden = true; inspBody.hidden = false;
+  inspBody.innerHTML = `
+    <div class="insp-section">
+      <h3>複数選択 (${editor.selNodes.size})</h3>
+      <div class="field" style="font-size:11.5px;color:var(--text-faint)">Shift+クリックで増減 / Shift+ドラッグで範囲選択</div>
+    </div>
+    <div class="insp-section">
+      <h3>整列</h3>
+      <div class="btn-row" id="m-align">
+        <button class="chip-btn" data-al="left" title="左揃え">⇤ 左</button>
+        <button class="chip-btn" data-al="hcenter" title="左右中央">↔ 中央</button>
+        <button class="chip-btn" data-al="right" title="右揃え">⇥ 右</button>
+      </div>
+      <div class="btn-row" id="m-align2" style="margin-top:7px">
+        <button class="chip-btn" data-al="top" title="上揃え">⤒ 上</button>
+        <button class="chip-btn" data-al="vcenter" title="上下中央">↕ 中央</button>
+        <button class="chip-btn" data-al="bottom" title="下揃え">⤓ 下</button>
+      </div>
+    </div>
+    <div class="insp-section">
+      <h3>等間隔に分布</h3>
+      <div class="btn-row" id="m-dist">
+        <button class="chip-btn" data-di="h">水平</button>
+        <button class="chip-btn" data-di="v">垂直</button>
+      </div>
+    </div>
+    <div class="insp-section">
+      <h3>操作</h3>
+      <div class="btn-row"><button class="chip-btn danger" data-mop="del">🗑 まとめて削除</button></div>
+    </div>`;
+  inspBody.querySelectorAll('[data-al]').forEach((b) => b.addEventListener('click', () => editor.alignSelected(b.dataset.al)));
+  inspBody.querySelectorAll('[data-di]').forEach((b) => b.addEventListener('click', () => editor.distributeSelected(b.dataset.di)));
+  inspBody.querySelector('[data-mop="del"]').addEventListener('click', () => editor.deleteSelected());
 }
 
 function swatchRow(active) {
