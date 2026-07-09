@@ -1,6 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
 import { ICONS } from './icons.js';
 import { typeInfo } from './nodes.js';
+import { BRAND_ICONS } from './brands.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -264,10 +265,18 @@ export class Editor {
     g.appendChild(el('rect', { x: 0, y: 0, width: 4, height: n.h, rx: 2, fill: n.color }));
     const by = (n.h - 36) / 2;
     if (info.logo) {
-      // brand-colored tile with initials (not a trademarked logo reproduction)
-      g.appendChild(el('rect', { x: 14, y: by, width: 36, height: 36, rx: 9, fill: n.color }));
-      const in2 = text(32, by + 24, initials(info.brandText || n.label), 'node-title', '#ffffff');
-      in2.setAttribute('text-anchor', 'middle'); in2.setAttribute('font-size', '13'); g.appendChild(in2);
+      // brand icon (Simple Icons, CC0) on a brand-color tile; initials when no icon exists
+      const bi = BRAND_ICONS[n.type];
+      const col = bi ? bi.hex : n.color;
+      g.appendChild(el('rect', { x: 14, y: by, width: 36, height: 36, rx: 9, fill: col }));
+      if (bi) {
+        const ic = el('g', { transform: `translate(${14 + 8} ${by + 8}) scale(${20 / 24})`, fill: '#ffffff' });
+        ic.innerHTML = `<path d="${bi.path}"/>`;
+        g.appendChild(ic);
+      } else {
+        const in2 = text(32, by + 24, initials(n.label), 'node-title', '#ffffff');
+        in2.setAttribute('text-anchor', 'middle'); in2.setAttribute('font-size', '13'); g.appendChild(in2);
+      }
     } else {
       g.appendChild(el('rect', { x: 14, y: by, width: 36, height: 36, rx: 10, fill: mix(n.color, 18), stroke: n.color, 'stroke-opacity': 0.4 }));
       const ic = el('g', { transform: `translate(${14 + 8} ${by + 8}) scale(${20 / 24})`, fill: 'none', stroke: n.color, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });

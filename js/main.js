@@ -3,6 +3,7 @@ import { initBackground } from './background.js';
 import { Editor } from './editor.js';
 import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js';
 import { iconSvg } from './icons.js';
+import { BRAND_ICONS } from './brands.js';
 import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -74,7 +75,9 @@ function buildPalette() {
         ${g.types.map((t) => `
           <div class="pal-item" draggable="true" data-type="${t.id}" style="--ncolor:${t.color}" title="${t.label}">
             ${t.logo
-              ? `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color}">${palInitials(t.label)}</div>`
+              ? (BRAND_ICONS[t.id]
+                  ? `<div class="pi-icon pi-logo" style="background:${BRAND_ICONS[t.id].hex};border-color:${BRAND_ICONS[t.id].hex}"><svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="${BRAND_ICONS[t.id].path}"/></svg></div>`
+                  : `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color}">${palInitials(t.label)}</div>`)
               : `<div class="pi-icon">${iconSvg(t.icon, 18)}</div>`}
             <div class="pi-label">${t.label}</div>
           </div>`).join('')}
