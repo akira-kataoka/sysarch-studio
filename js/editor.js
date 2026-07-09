@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js';
-import { typeInfo } from './nodes.js';
-import { BRAND_ICONS } from './brands.js';
+import { ICONS } from './icons.js?v=7';
+import { typeInfo } from './nodes.js?v=7';
+import { BRAND_ICONS } from './brands.js?v=7';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -314,6 +314,8 @@ export class Editor {
     const color = e.color || this._c.edge;
     const g = el('g', { class: 'edge-g', 'data-id': e.id, 'data-color': color });
     g.appendChild(el('path', { class: 'edge-hit', d, fill: 'none', stroke: 'transparent', 'stroke-width': 16, 'pointer-events': 'stroke' }));
+    // casing: a background-colored halo so crossing lines read clearly (which one is on top)
+    g.appendChild(el('path', { class: 'edge-casing', d, fill: 'none', stroke: this._c.canvas, 'stroke-width': 6.5, 'stroke-linecap': 'round', 'pointer-events': 'none' }));
     const line = el('path', {
       class: 'edge-line', d, fill: 'none', stroke: color, 'stroke-width': 2,
       'stroke-linecap': 'round',
