@@ -58,7 +58,15 @@
           <button data-act="zoom-in" class="icon-btn" title="拡大">＋</button>
         </div>
         <button data-act="grid" class="text-btn toggle is-on" title="グリッド表示">⊞ グリッド</button>
+        <button data-act="layout" class="text-btn" title="自動整列（左→右レイヤー配置）">⇄ 整列</button>
         <div class="spacer"></div>
+        <div class="menu-wrap">
+          <button data-act="samples" class="text-btn" title="サンプル図を読み込む">サンプル ▾</button>
+          <div class="menu" id="samples-menu" hidden>
+            <button data-sample="arch">システム構成図 <em>Web三層＋非同期</em></button>
+            <button data-sample="integration">システム連携図 <em>部門 × SaaS × プロセス</em></button>
+          </div>
+        </div>
         <div class="menu-wrap">
           <button data-act="theme-menu" class="text-btn" title="配色テーマ">◐ テーマ ▾</button>
           <div class="menu" id="theme-menu" hidden><!-- populated by JS --></div>
@@ -71,6 +79,7 @@
             <button data-export="svg">SVG で保存 <em>ベクター・再編集可</em></button>
             <button data-export="png">PNG で保存 <em>スライド貼付向け・2x</em></button>
             <button data-export="png4">PNG で保存 <em>高解像度・4x</em></button>
+            <button data-export="pdf">PDF で保存 <em>1ページ・スライド用</em></button>
             <button data-export="clipboard">PNG をコピー <em>クリップボードへ</em></button>
           </div>
         </div>

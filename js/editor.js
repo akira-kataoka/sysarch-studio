@@ -82,17 +82,17 @@ export class Editor {
 
   addNode(type, x, y, opts = {}) {
     const info = typeInfo(type);
-    const isGroup = info.shape === 'group';
+    const shape = info.shape || 'card';
     const id = this._id('n');
-    const w = isGroup ? 300 : NODE_W;
-    const h = isGroup ? 180 : NODE_H;
+    const [w, h] = ({ group: [320, 200], band: [460, 300], banner: [320, 52], plain: [150, 46] }[shape]) || [NODE_W, NODE_H];
+    const backLayer = shape === 'group' || shape === 'band';
     const node = {
       id, type, x: snap(x - w / 2), y: snap(y - h / 2), w, h,
       label: opts.label ?? info.label, sub: opts.sub ?? '', color: opts.color ?? info.color,
-      shape: info.shape || 'card',
+      shape,
     };
     this.state.nodes[id] = node;
-    if (isGroup) this.state.order.unshift(id); else this.state.order.push(id);
+    if (backLayer) this.state.order.unshift(id); else this.state.order.push(id);
     this._pushHistory();
     this.render();
     this.select('node', id);
@@ -105,7 +105,7 @@ export class Editor {
     for (const e of Object.values(this.state.edges))
       if (e.from === from && e.to === to) return e;
     const id = this._id('e');
-    const edge = { id, from, to, label: opts.label ?? '', style: opts.style ?? 'solid', dir: opts.dir ?? 'forward', color: opts.color ?? '' };
+    const edge = { id, from, to, label: opts.label ?? '', style: opts.style ?? 'solid', dir: opts.dir ?? 'forward', route: opts.route ?? 'curved', color: opts.color ?? '' };
     this.state.edges[id] = edge;
     this._pushHistory();
     this.render();
@@ -222,33 +222,69 @@ export class Editor {
   _nodeEl(n) {
     const info = typeInfo(n.type);
     const C = this._c;
+    const shape = n.shape || 'card';
     const g = el('g', { class: 'node-g', 'data-id': n.id, transform: `translate(${n.x} ${n.y})` });
 
-    if (n.shape === 'group') {
-      g.appendChild(el('rect', { class: 'group-card', width: n.w, height: n.h, rx: 16, fill: mix(n.color, 8), stroke: n.color, 'stroke-width': 1.6, 'stroke-dasharray': '2 6', 'stroke-linecap': 'round', 'stroke-opacity': 0.9 }));
-      g.appendChild(text(14, 22, n.label, 'node-title', n.color));
-      if (n.sub) g.appendChild(text(14, 40, n.sub, 'node-sub', C.nodeSub));
+    // ---- background band: large translucent region, header chip only is clickable ----
+    if (shape === 'band') {
+      g.appendChild(el('rect', { width: n.w, height: n.h, rx: 18, fill: mix(n.color, 8), stroke: mix(n.color, 28), 'stroke-width': 1.4, 'pointer-events': 'none' }));
+      const cw = (n.label || ' ').length * 8 + 26;
+      g.appendChild(el('rect', { class: 'grp-head', x: 14, y: 12, width: cw, height: 24, rx: 7, fill: mix(n.color, 24) }));
+      g.appendChild(text(26, 28, n.label, 'node-sub', n.color));
+      return g; // no ports
+    }
+
+    // ---- zone / department container: titled header bar, body is click-through ----
+    if (shape === 'group') {
+      g.appendChild(el('rect', { width: n.w, height: n.h, rx: 14, fill: mix(n.color, 6), stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.8, 'pointer-events': 'none' }));
+      g.appendChild(el('rect', { class: 'grp-head', width: n.w, height: 32, rx: 14, fill: mix(n.color, 20) }));
+      g.appendChild(el('rect', { class: 'grp-head', y: 16, width: n.w, height: 16, fill: mix(n.color, 20) }));
+      g.appendChild(text(14, 21, n.label, 'node-title', n.color));
+      if (n.sub) g.appendChild(text(n.w - 12, 21, n.sub, 'node-sub', C.nodeSub)).setAttribute('text-anchor', 'end');
+      return g; // no ports; drag by header
+    }
+
+    // ---- title banner: solid accent bar with white text ----
+    if (shape === 'banner') {
+      g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 10, fill: n.color, filter: 'url(#node-shadow)' }));
+      g.appendChild(text(16, n.h / 2 + 5, n.label, 'node-title', '#ffffff'));
+      return this._withPorts(g, n);
+    }
+
+    // ---- plain process box: centered label, no icon badge ----
+    if (shape === 'plain') {
+      g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 9, fill: C.nodeBg, stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.7, filter: 'url(#node-shadow)' }));
+      const c1 = text(n.w / 2, n.sub ? n.h / 2 - 3 : n.h / 2 + 5, n.label, 'node-title', C.nodeText); c1.setAttribute('text-anchor', 'middle'); g.appendChild(c1);
+      if (n.sub) { const c2 = text(n.w / 2, n.h / 2 + 15, n.sub, 'node-sub', C.nodeSub); c2.setAttribute('text-anchor', 'middle'); g.appendChild(c2); }
+      return this._withPorts(g, n);
+    }
+
+    // ---- default card (icon badge + title + subtitle); logo tiles use a filled initial chip ----
+    g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 14, fill: C.nodeBg, stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.45, filter: 'url(#node-shadow)' }));
+    g.appendChild(el('rect', { x: 0, y: 0, width: 4, height: n.h, rx: 2, fill: n.color }));
+    const by = (n.h - 36) / 2;
+    if (info.logo) {
+      // brand-colored tile with initials (not a trademarked logo reproduction)
+      g.appendChild(el('rect', { x: 14, y: by, width: 36, height: 36, rx: 9, fill: n.color }));
+      const in2 = text(32, by + 24, initials(info.brandText || n.label), 'node-title', '#ffffff');
+      in2.setAttribute('text-anchor', 'middle'); in2.setAttribute('font-size', '13'); g.appendChild(in2);
     } else {
-      g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 14, fill: C.nodeBg, stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.45, filter: 'url(#node-shadow)' }));
-      // accent left bar
-      g.appendChild(el('rect', { x: 0, y: 0, width: 4, height: n.h, rx: 2, fill: n.color }));
-      // icon badge
-      const by = (n.h - 36) / 2;
       g.appendChild(el('rect', { x: 14, y: by, width: 36, height: 36, rx: 10, fill: mix(n.color, 18), stroke: n.color, 'stroke-opacity': 0.4 }));
       const ic = el('g', { transform: `translate(${14 + 8} ${by + 8}) scale(${20 / 24})`, fill: 'none', stroke: n.color, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
       ic.innerHTML = ICONS[info.icon] || ICONS.box;
       g.appendChild(ic);
-      // texts
-      const tx = 62;
-      if (n.sub) {
-        g.appendChild(text(tx, n.h / 2 - 3, n.label, 'node-title', C.nodeText));
-        g.appendChild(text(tx, n.h / 2 + 15, n.sub, 'node-sub', C.nodeSub));
-      } else {
-        g.appendChild(text(tx, n.h / 2 + 5, n.label, 'node-title', C.nodeText));
-      }
     }
+    const tx = 62;
+    if (n.sub) {
+      g.appendChild(text(tx, n.h / 2 - 3, n.label, 'node-title', C.nodeText));
+      g.appendChild(text(tx, n.h / 2 + 15, n.sub, 'node-sub', C.nodeSub));
+    } else {
+      g.appendChild(text(tx, n.h / 2 + 5, n.label, 'node-title', C.nodeText));
+    }
+    return this._withPorts(g, n);
+  }
 
-    // ports
+  _withPorts(g, n) {
     const ports = el('g', { class: 'ports' });
     for (const [px, py] of [[n.w / 2, 0], [n.w, n.h / 2], [n.w / 2, n.h], [0, n.h / 2]]) {
       ports.appendChild(el('circle', { class: 'port', cx: px, cy: py, r: 5, 'data-id': n.id, 'data-px': px, 'data-py': py }));
@@ -257,10 +293,15 @@ export class Editor {
     return g;
   }
 
-  _edgeEl(e, a, b) {
+  _edgeGeom(e, a, b) {
     const ca = center(a), cb = center(b);
     const pa = anchor(a, cb.x, cb.y), pb = anchor(b, ca.x, ca.y);
-    const d = curve(pa, pb);
+    const d = e.route === 'orthogonal' ? orthPath(pa, pb) : curve(pa, pb);
+    return { d, pa, pb };
+  }
+
+  _edgeEl(e, a, b) {
+    const { d, pa, pb } = this._edgeGeom(e, a, b);
     const color = e.color || this._c.edge;
     const g = el('g', { class: 'edge-g', 'data-id': e.id, 'data-color': color });
     g.appendChild(el('path', { class: 'edge-hit', d, fill: 'none', stroke: 'transparent', 'stroke-width': 16, 'pointer-events': 'stroke' }));
@@ -290,8 +331,7 @@ export class Editor {
       if (!a || !b) continue;
       const g = this.$edges.querySelector(`.edge-g[data-id="${e.id}"]`);
       if (!g) continue;
-      const ca = center(a), cb = center(b);
-      const d = curve(anchor(a, cb.x, cb.y), anchor(b, ca.x, ca.y));
+      const { d } = this._edgeGeom(e, a, b);
       g.querySelectorAll('path').forEach((p) => p.setAttribute('d', d));
       // labels don't reflow live; refreshed on full render
     }
@@ -328,6 +368,12 @@ export class Editor {
         const n = this.state.nodes[id];
         const w = this.screenToWorld(e.clientX, e.clientY);
         drag = { mode: 'node', id, ox: w.x - n.x, oy: w.y - n.y, moved: false };
+        if (n.shape === 'group') {           // container: carry the nodes inside it
+          drag.gx0 = n.x; drag.gy0 = n.y;
+          drag.children = Object.values(this.state.nodes)
+            .filter((m) => m.id !== id && m.shape !== 'group' && inside(n, m))
+            .map((m) => ({ id: m.id, x0: m.x, y0: m.y }));
+        }
         capture(e.pointerId);
         return;
       }
@@ -352,6 +398,16 @@ export class Editor {
         const g = this.$nodes.querySelector(`.node-g[data-id="${drag.id}"]`);
         if (g) g.setAttribute('transform', `translate(${n.x} ${n.y})`);
         this._updateNodeEdges(drag.id);
+        if (drag.children) {                 // move contained nodes by the group's exact delta
+          const ddx = n.x - drag.gx0, ddy = n.y - drag.gy0;
+          for (const c of drag.children) {
+            const m = this.state.nodes[c.id]; if (!m) continue;
+            m.x = c.x0 + ddx; m.y = c.y0 + ddy;
+            const cg = this.$nodes.querySelector(`.node-g[data-id="${c.id}"]`);
+            if (cg) cg.setAttribute('transform', `translate(${m.x} ${m.y})`);
+            this._updateNodeEdges(c.id);
+          }
+        }
       } else if (drag.mode === 'link') {
         const w = this.screenToWorld(e.clientX, e.clientY);
         this._tempLink.setAttribute('d', curve({ x: drag.start.x, y: drag.start.y, dir: { x: 0, y: 0 } }, { x: w.x, y: w.y, dir: { x: 0, y: 0 } }));
@@ -434,6 +490,42 @@ export class Editor {
 
   toggleGrid(v) { this.showGrid = v ?? !this.showGrid; this._applyView(); return this.showGrid; }
 
+  // layered left-to-right auto layout based on edge direction
+  autoLayout() {
+    const skip = new Set(['group', 'band', 'banner']);
+    const nodes = Object.values(this.state.nodes).filter((n) => !skip.has(n.shape));
+    if (!nodes.length) return;
+    const idset = new Set(nodes.map((n) => n.id));
+    const edges = Object.values(this.state.edges).filter((e) => idset.has(e.from) && idset.has(e.to) && e.from !== e.to);
+    const indeg = {}, adj = {};
+    nodes.forEach((n) => { indeg[n.id] = 0; adj[n.id] = []; });
+    edges.forEach((e) => { adj[e.from].push(e.to); indeg[e.to] = (indeg[e.to] || 0) + 1; });
+    let roots = nodes.filter((n) => indeg[n.id] === 0).map((n) => n.id);
+    if (!roots.length) roots = [nodes[0].id];       // cyclic fallback
+    const layer = {}; roots.forEach((id) => (layer[id] = 0));
+    const indeg2 = { ...indeg }; const q = [...roots]; const seen = new Set(roots);
+    while (q.length) {
+      const u = q.shift();
+      for (const v of adj[u]) {
+        layer[v] = Math.max(layer[v] ?? 0, (layer[u] ?? 0) + 1);
+        if (--indeg2[v] <= 0 && !seen.has(v)) { seen.add(v); q.push(v); }
+      }
+    }
+    let maxL = 0; Object.values(layer).forEach((l) => (maxL = Math.max(maxL, l)));
+    nodes.forEach((n) => { if (layer[n.id] == null) layer[n.id] = ++maxL; });
+    const cols = {};
+    nodes.forEach((n) => { (cols[layer[n.id]] ||= []).push(n); });
+    const colW = NODE_W + 132, rowH = NODE_H + 46;
+    let maxRows = 0; Object.values(cols).forEach((c) => (maxRows = Math.max(maxRows, c.length)));
+    const totalH = maxRows * rowH;
+    Object.keys(cols).map(Number).sort((a, b) => a - b).forEach((L) => {
+      const col = cols[L].sort((a, b) => a.y - b.y);
+      const colH = col.length * rowH;
+      col.forEach((n, i) => { n.x = snap(80 + L * colW); n.y = snap(80 + (totalH - colH) / 2 + i * rowH); });
+    });
+    this._pushHistory(); this.render(); this.fitView();
+  }
+
   // ---------- history ----------
   _pushHistory() {
     this._hist.push(JSON.stringify(this.state));
@@ -490,7 +582,22 @@ export class Editor {
 
 // ---------- geometry / dom helpers ----------
 function center(n) { return { x: n.x + n.w / 2, y: n.y + n.h / 2 }; }
+// is node m's center within group g's rect?
+function inside(g, m) {
+  const cx = m.x + m.w / 2, cy = m.y + m.h / 2;
+  return cx > g.x && cx < g.x + g.w && cy > g.y && cy < g.y + g.h;
+}
 function snap(v) { return Math.round(v / SNAP) * SNAP; }
+// 1-2 char initials for logo tiles (ASCII first letters, else first glyph)
+function initials(s) {
+  const str = String(s || '?').trim();
+  const ascii = str.replace(/[^A-Za-z0-9 ]/g, '').trim();
+  if (ascii) {
+    const parts = ascii.split(/\s+/);
+    return (parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase();
+  }
+  return str.slice(0, 1);
+}
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
 function anchor(node, tx, ty) {
@@ -513,6 +620,47 @@ function curve(a, b) {
   const c1x = a.x + a.dir.x * off, c1y = a.y + a.dir.y * off;
   const c2x = b.x + b.dir.x * off, c2y = b.y + b.dir.y * off;
   return `M ${a.x} ${a.y} C ${c1x} ${c1y} ${c2x} ${c2y} ${b.x} ${b.y}`;
+}
+
+// orthogonal (right-angle) connector with rounded corners
+function orthPath(a, b) {
+  const pad = 20;
+  const ax = a.x + a.dir.x * pad, ay = a.y + a.dir.y * pad;
+  const bx = b.x + b.dir.x * pad, by = b.y + b.dir.y * pad;
+  let pts;
+  if (a.dir.x !== 0) {
+    const midx = (ax + bx) / 2;
+    pts = b.dir.x !== 0
+      ? [[a.x, a.y], [ax, ay], [midx, ay], [midx, by], [bx, by], [b.x, b.y]]
+      : [[a.x, a.y], [ax, ay], [bx, ay], [bx, by], [b.x, b.y]];
+  } else {
+    const midy = (ay + by) / 2;
+    pts = b.dir.y !== 0
+      ? [[a.x, a.y], [ax, ay], [ax, midy], [bx, midy], [bx, by], [b.x, b.y]]
+      : [[a.x, a.y], [ax, ay], [ax, by], [bx, by], [b.x, b.y]];
+  }
+  return roundedPath(dedupe(pts), 9);
+}
+function dedupe(pts) {
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const [px, py] = out[out.length - 1], [x, y] = pts[i];
+    if (Math.abs(px - x) > 0.5 || Math.abs(py - y) > 0.5) out.push(pts[i]);
+  }
+  return out;
+}
+function roundedPath(pts, r) {
+  if (pts.length < 3) return `M ${pts[0][0]} ${pts[0][1]} L ${pts[pts.length - 1][0]} ${pts[pts.length - 1][1]}`;
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+    const v1x = x1 - x0, v1y = y1 - y0, v2x = x2 - x1, v2y = y2 - y1;
+    const l1 = Math.hypot(v1x, v1y) || 1, l2 = Math.hypot(v2x, v2y) || 1;
+    const rr = Math.min(r, l1 / 2, l2 / 2);
+    d += ` L ${(x1 - v1x / l1 * rr).toFixed(1)} ${(y1 - v1y / l1 * rr).toFixed(1)} Q ${x1} ${y1} ${(x1 + v2x / l2 * rr).toFixed(1)} ${(y1 + v2y / l2 * rr).toFixed(1)}`;
+  }
+  const last = pts[pts.length - 1];
+  return d + ` L ${last[0]} ${last[1]}`;
 }
 
 function el(name, attrs = {}) {

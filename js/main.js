@@ -3,10 +3,16 @@ import { initBackground } from './background.js';
 import { Editor } from './editor.js';
 import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js';
 import { iconSvg } from './icons.js';
-import { exportSVG, exportPNG, copyPNG } from './export.js';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const palInitials = (s) => {
+  const a = String(s || '?').replace(/[^A-Za-z0-9 ]/g, '').trim();
+  if (!a) return String(s).slice(0, 1);
+  const p = a.split(/\s+/);
+  return (p.length > 1 ? p[0][0] + p[1][0] : p[0].slice(0, 2)).toUpperCase();
+};
 const svg = $('#canvas');
 const editor = new Editor(svg);
 window.__editor = editor; // debug / tooling handle
@@ -67,7 +73,9 @@ function buildPalette() {
       <div class="pal-items">
         ${g.types.map((t) => `
           <div class="pal-item" draggable="true" data-type="${t.id}" style="--ncolor:${t.color}" title="${t.label}">
-            <div class="pi-icon">${iconSvg(t.icon, 18)}</div>
+            ${t.logo
+              ? `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color}">${palInitials(t.label)}</div>`
+              : `<div class="pi-icon">${iconSvg(t.icon, 18)}</div>`}
             <div class="pi-label">${t.label}</div>
           </div>`).join('')}
       </div>
@@ -125,7 +133,9 @@ document.querySelector('.topbar-actions').addEventListener('click', (e) => {
     case 'zoom-out': editor.zoomBy(1 / 1.2); break;
     case 'zoom-fit': editor.fitView(); break;
     case 'grid': { const on = editor.toggleGrid(); btn.classList.toggle('is-on', on); break; }
-    case 'theme-menu': { const m = $('#theme-menu'); m.hidden = !m.hidden; $('#export-menu').hidden = true; break; }
+    case 'layout': editor.autoLayout(); toast('自動整列しました'); break;
+    case 'samples': { const m = $('#samples-menu'); m.hidden = !m.hidden; $('#theme-menu').hidden = true; $('#export-menu').hidden = true; break; }
+    case 'theme-menu': { const m = $('#theme-menu'); m.hidden = !m.hidden; $('#export-menu').hidden = true; $('#samples-menu').hidden = true; break; }
     case 'save': saveFile(); break;
     case 'load': $('#file-input').click(); break;
     case 'export': toggleExportMenu(); break;
@@ -141,6 +151,7 @@ $('#export-menu').addEventListener('click', async (e) => {
     if (kind === 'svg') { exportSVG(editor); toast('SVG を書き出しました', 'ok'); }
     else if (kind === 'png') { await exportPNG(editor, 2); toast('PNG (2x) を書き出しました', 'ok'); }
     else if (kind === 'png4') { await exportPNG(editor, 4); toast('PNG (4x) を書き出しました', 'ok'); }
+    else if (kind === 'pdf') { await exportPDF(editor, 2); toast('PDF を書き出しました', 'ok'); }
     else if (kind === 'clipboard') { await copyPNG(editor, 2); toast('PNG をクリップボードにコピー', 'ok'); }
   } catch (err) { console.error(err); toast('書き出しに失敗: ' + err.message, 'err'); }
 });
@@ -150,7 +161,14 @@ function toggleExportMenu() {
   m.hidden = !m.hidden;
 }
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.menu-wrap')) { $('#export-menu').hidden = true; $('#theme-menu').hidden = true; }
+  if (!e.target.closest('.menu-wrap')) { $('#export-menu').hidden = true; $('#theme-menu').hidden = true; $('#samples-menu').hidden = true; }
+});
+
+$('#samples-menu').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sample]'); if (!b) return;
+  $('#samples-menu').hidden = true;
+  editor.loadJSON(b.dataset.sample === 'integration' ? demoIntegration() : demoDiagram());
+  toast(b.dataset.sample === 'integration' ? '連携図サンプルを読み込みました' : '構成図サンプルを読み込みました', 'ok');
 });
 
 $('#theme-menu').addEventListener('click', (e) => {
@@ -244,6 +262,13 @@ function renderEdgeInspector(e) {
       </div>
     </div>
     <div class="insp-section">
+      <h3>配線</h3>
+      <div class="btn-row" id="e-route">
+        <button class="chip-btn${e.route !== 'orthogonal' ? ' is-active' : ''}" data-route="curved">〰 なめらか</button>
+        <button class="chip-btn${e.route === 'orthogonal' ? ' is-active' : ''}" data-route="orthogonal">⌐ 直角</button>
+      </div>
+    </div>
+    <div class="insp-section">
       <h3>色</h3>
       <div class="btn-row" style="margin-bottom:8px"><button class="chip-btn${!e.color ? ' is-active' : ''}" data-color="">既定</button></div>
       ${swatchRow(e.color)}
@@ -258,6 +283,7 @@ function renderEdgeInspector(e) {
   lab.addEventListener('change', () => editor.commit());
   $('#e-dir', inspBody).addEventListener('click', (ev) => { const btn = ev.target.closest('[data-dir]'); if (btn) { editor.applyPatch({ dir: btn.dataset.dir }); setActive('#e-dir', btn); } });
   $('#e-style', inspBody).addEventListener('click', (ev) => { const btn = ev.target.closest('[data-style]'); if (btn) { editor.applyPatch({ style: btn.dataset.style }); setActive('#e-style', btn); } });
+  $('#e-route', inspBody).addEventListener('click', (ev) => { const btn = ev.target.closest('[data-route]'); if (btn) { editor.applyPatch({ route: btn.dataset.route }); setActive('#e-route', btn); } });
   inspBody.querySelectorAll('[data-color]').forEach((s) => s.addEventListener('click', () => {
     editor.applyPatch({ color: s.dataset.color });
     inspBody.querySelectorAll('[data-color]').forEach((x) => x.classList.toggle('is-active', x === s));
@@ -274,6 +300,7 @@ function bindOps() {
 }
 
 /* ---------------- keyboard ---------------- */
+let clip = null, pasteN = 0;   // copy/paste buffer
 addEventListener('keydown', (e) => {
   if (isTyping(e)) return;
   const meta = e.ctrlKey || e.metaKey;
@@ -281,6 +308,8 @@ addEventListener('keydown', (e) => {
   if (meta && e.key.toLowerCase() === 'y') { e.preventDefault(); editor.redo(); return; }
   if (meta && e.key.toLowerCase() === 's') { e.preventDefault(); saveFile(); return; }
   if (meta && e.key.toLowerCase() === 'd') { e.preventDefault(); editor.duplicateSelected(); return; }
+  if (meta && e.key.toLowerCase() === 'c') { const n = editor.selected(); if (editor.sel.kind === 'node' && n) { e.preventDefault(); clip = { type: n.type, label: n.label, sub: n.sub, color: n.color }; pasteN = 0; toast('コピーしました'); } return; }
+  if (meta && e.key.toLowerCase() === 'v') { if (clip) { e.preventDefault(); const r = svg.getBoundingClientRect(); const w = editor.screenToWorld(r.left + r.width / 2, r.top + r.height / 2); const o = (++pasteN) * 18; editor.addNode(clip.type, w.x + o, w.y + o, { label: clip.label, sub: clip.sub, color: clip.color }); } return; }
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); editor.deleteSelected(); return; }
   if (e.key === 'f' || e.key === 'F') { editor.fitView(); return; }
   if (e.key === 'Escape') { editor.select(null, null); return; }
@@ -404,6 +433,61 @@ function demoDiagram() {
   const state = { nodes: {}, edges: {}, order: [], counter: 100 };
   nodes.forEach((n) => { state.nodes[n.id] = n; state.order.push(n.id); });
   edges.forEach((e) => { state.edges[e.id] = e; });
+  return { version: 1, state };
+}
+
+// integration / collaboration diagram sample (departments × SaaS × process boxes)
+function demoIntegration() {
+  let i = 200; const nid = () => 'n' + (++i);
+  const back = [], front = [];
+  const zone = (x, y, w, h, label, c) => { const o = { id: nid(), type: 'zone', x, y, w, h, label, sub: '', color: c, shape: 'group' }; back.push(o); return o; };
+  const band = (x, y, w, h, label, c) => { const o = { id: nid(), type: 'band', x, y, w, h, label, sub: '', color: c, shape: 'band' }; back.push(o); return o; };
+  const banner = (x, y, w, label, c) => { const o = { id: nid(), type: 'banner', x, y, w, h: 52, label, sub: '', color: c, shape: 'banner' }; front.push(o); return o; };
+  const box = (x, y, label) => { const o = { id: nid(), type: 'step', x, y, w: 120, h: 44, label, sub: '', color: '#94a3b8', shape: 'plain' }; front.push(o); return o; };
+  const logo = (x, y, type, label, c) => { const o = { id: nid(), type, x, y, w: 172, h: 56, label, sub: '', color: c, shape: 'card' }; front.push(o); return o; };
+
+  banner(40, 22, 320, '全社DX システム連携図', '#4d8dff');
+  band(30, 300, 700, 258, 'Salesforce 基盤', '#4dd0e1');
+  zone(40, 96, 300, 196, 'マーケティング部門', '#5b9dff');
+  zone(380, 96, 330, 462, 'セールス部門', '#7c5cff');
+  zone(752, 118, 210, 306, 'バックオフィス', '#43d19e');
+  zone(984, 118, 250, 306, 'カスタマーサクセス', '#ffb454');
+
+  logo(60, 150, 'google', 'Google 広告', '#4285F4');
+  const mLead = box(70, 226, 'リード');
+  const mNur = box(210, 226, 'リード育成');
+
+  logo(398, 150, 'zoom', 'Zoom / Meet', '#2D8CFF');
+  logo(560, 150, 'salesforce', 'Salesforce', '#00A1E0');
+  const bTori = box(398, 330, '取引先');
+  const bTanto = box(398, 392, '取引先責任者');
+  const bSho = box(560, 330, '商談');
+  const bAct = box(560, 392, '活動履歴');
+  const bMi = box(560, 454, '見積り');
+  const bKe = box(560, 508, '契約');
+
+  logo(760, 150, 'freee', 'freee 会計', '#007BE0');
+  const oSei = box(778, 240, '請求・売上');
+  const oShin = box(778, 302, '申請');
+  const oJu = box(778, 364, '受注承認');
+
+  logo(1000, 40, 'slack', 'Slack', '#611f69');
+  const cAnken = box(1006, 240, '案件');
+  const cChohyo = box(1006, 302, '帳票出力');
+  const cKosu = box(1006, 364, '工数管理');
+
+  const edges = []; let e = 0;
+  const E = (from, to, label = '', style = 'solid', dir = 'forward') => edges.push({ id: 'e' + (++e), from: from.id, to: to.id, label, style, dir, route: 'orthogonal', color: '' });
+  E(mLead, mNur, '育成'); E(mNur, bTori, '引き渡し');
+  E(bTori, bSho); E(bTanto, bSho); E(bSho, bAct); E(bAct, bMi); E(bMi, bKe);
+  E(bKe, oSei, '受注', 'dashed'); E(oSei, oShin); E(oShin, oJu);
+  E(oJu, cAnken, '案件化', 'dashed'); E(cAnken, cChohyo); E(cChohyo, cKosu);
+  E(bSho, cAnken, '通知', 'dotted');
+
+  const order = [...back.map((o) => o.id), ...front.map((o) => o.id)];
+  const state = { nodes: {}, edges: {}, order, counter: 400 };
+  [...back, ...front].forEach((o) => (state.nodes[o.id] = o));
+  edges.forEach((x) => (state.edges[x.id] = x));
   return { version: 1, state };
 }
 
