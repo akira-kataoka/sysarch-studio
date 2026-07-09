@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=9';
-import { Editor } from './editor.js?v=9';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=9';
-import { iconSvg } from './icons.js?v=9';
-import { BRAND_ICONS } from './brands.js?v=9';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=9';
+import { initBackground } from './background.js?v=10';
+import { Editor } from './editor.js?v=10';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=10';
+import { iconSvg } from './icons.js?v=10';
+import { BRAND_ICONS } from './brands.js?v=10';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=10';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -237,6 +237,7 @@ function renderNodeInspector(n) {
   const info = typeInfo(n.type);
   const isText = n.shape === 'text';
   const isList = n.shape === 'list';
+  const isGroup = n.shape === 'group';
   const isLogo = info.logo || n.img;
   const labelField = isText
     ? `<textarea id="f-label" rows="2" placeholder="テキスト（改行可）">${esc(n.label)}</textarea>`
@@ -261,6 +262,16 @@ function renderNodeInspector(n) {
     <div class="insp-section">
       <h3>アクセント色</h3>
       ${swatchRow(n.color)}
+    </div>
+    ${isGroup ? `<div class="insp-section"><h3>コンテナ</h3><div class="btn-row">
+        <button class="chip-btn" data-op="fitzone">▣ 中身に合わせる</button>
+      </div></div>` : ''}
+    <div class="insp-section">
+      <h3>重なり順</h3>
+      <div class="btn-row">
+        <button class="chip-btn" data-op="front">⬆ 前面へ</button>
+        <button class="chip-btn" data-op="back">⬇ 背面へ</button>
+      </div>
     </div>
     <div class="insp-section">
       <h3>操作</h3>
@@ -345,6 +356,9 @@ function bindOps() {
     else if (b.dataset.op === 'dup') editor.duplicateSelected();
     else if (b.dataset.op === 'img') pickImage((uri) => { editor.applyPatch({ img: uri }); editor.emit('select', editor.sel); });
     else if (b.dataset.op === 'img-clear') { editor.applyPatch({ img: '' }); editor.emit('select', editor.sel); }
+    else if (b.dataset.op === 'front') editor.bringToFront();
+    else if (b.dataset.op === 'back') editor.sendToBack();
+    else if (b.dataset.op === 'fitzone') { editor.fitZoneToChildren(); toast('枠を中身に合わせました'); }
   }));
 }
 
@@ -362,6 +376,14 @@ addEventListener('keydown', (e) => {
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); editor.deleteSelected(); return; }
   if (e.key === 'f' || e.key === 'F') { editor.fitView(); return; }
   if (e.key === 'Escape') { editor.select(null, null); return; }
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    if (editor.sel.kind === 'node') {
+      e.preventDefault();
+      const s = e.shiftKey ? 1 : 8;
+      editor.nudge(e.key === 'ArrowLeft' ? -s : e.key === 'ArrowRight' ? s : 0, e.key === 'ArrowUp' ? -s : e.key === 'ArrowDown' ? s : 0);
+    }
+    return;
+  }
 });
 function isTyping(e) { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable); }
 

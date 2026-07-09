@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=9';
-import { typeInfo } from './nodes.js?v=9';
-import { BRAND_ICONS } from './brands.js?v=9';
+import { ICONS } from './icons.js?v=10';
+import { typeInfo } from './nodes.js?v=10';
+import { BRAND_ICONS } from './brands.js?v=10';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -483,6 +483,7 @@ export class Editor {
         const w = this.screenToWorld(e.clientX, e.clientY);
         const n = this.state.nodes[drag.id];
         n.x = snap(w.x - drag.ox); n.y = snap(w.y - drag.oy);
+        this._showGuides(this._alignSnap(n));   // snap edges/centers to other nodes
         drag.moved = true;
         const g = this.$nodes.querySelector(`.node-g[data-id="${drag.id}"]`);
         if (g) g.setAttribute('transform', `translate(${n.x} ${n.y})`);
@@ -514,6 +515,7 @@ export class Editor {
     const end = (e) => {
       ptrs.delete(e.pointerId);
       if (ptrs.size < 2) pinch = null;
+      this._showGuides(null);
       if (!drag) { svg.classList.remove('panning', 'linking'); return; }
       if (drag.mode === 'node' && drag.moved) { this.render(); this._pushHistory(); }
       if (drag.mode === 'resize' && drag.moved) { this._pushHistory(); }
@@ -624,6 +626,60 @@ export class Editor {
       col.forEach((n, i) => { n.x = snap(80 + L * colW); n.y = snap(80 + (totalH - colH) / 2 + i * rowH); });
     });
     this._pushHistory(); this.render(); this.fitView();
+  }
+
+  // move selected node by a delta (keyboard nudge)
+  nudge(dx, dy) {
+    if (this.sel.kind !== 'node') return;
+    const n = this.state.nodes[this.sel.id]; if (!n) return;
+    n.x += dx; n.y += dy;
+    this.render(); this._pushHistory();
+  }
+
+  // z-order controls
+  bringToFront(id = this.sel.id) { if (!this.state.nodes[id]) return; this.state.order = this.state.order.filter((x) => x !== id); this.state.order.push(id); this._pushHistory(); this.render(); }
+  sendToBack(id = this.sel.id) { if (!this.state.nodes[id]) return; this.state.order = this.state.order.filter((x) => x !== id); this.state.order.unshift(id); this._pushHistory(); this.render(); }
+
+  // grow a zone/container to enclose the nodes inside it
+  fitZoneToChildren(id = this.sel.id) {
+    const z = this.state.nodes[id]; if (!z || z.shape !== 'group') return;
+    const kids = Object.values(this.state.nodes).filter((m) => m.id !== id && m.shape !== 'group' && inside(z, m));
+    if (!kids.length) return;
+    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    kids.forEach((m) => { minx = Math.min(minx, m.x); miny = Math.min(miny, m.y); maxx = Math.max(maxx, m.x + m.w); maxy = Math.max(maxy, m.y + m.h); });
+    z.x = snap(minx - 16); z.y = snap(miny - 44); z.w = snap(maxx - minx + 32); z.h = snap(maxy - miny + 60);
+    this._pushHistory(); this.render();
+  }
+
+  // snap the dragged node's edges/centers to other nodes; returns guide lines to draw
+  _alignSnap(n) {
+    const thr = 6;
+    const nx = [n.x, n.x + n.w / 2, n.x + n.w], ny = [n.y, n.y + n.h / 2, n.y + n.h];
+    let bx = null, by = null;
+    for (const m of Object.values(this.state.nodes)) {
+      if (m.id === n.id) continue;
+      const mx = [m.x, m.x + m.w / 2, m.x + m.w], my = [m.y, m.y + m.h / 2, m.y + m.h];
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+        const dx = mx[j] - nx[i]; if (Math.abs(dx) < thr && (!bx || Math.abs(dx) < Math.abs(bx.d))) bx = { d: dx, at: mx[j] };
+        const dy = my[j] - ny[i]; if (Math.abs(dy) < thr && (!by || Math.abs(dy) < Math.abs(by.d))) by = { d: dy, at: my[j] };
+      }
+    }
+    const guides = [];
+    if (bx) { n.x += bx.d; guides.push({ t: 'v', at: bx.at }); }
+    if (by) { n.y += by.d; guides.push({ t: 'h', at: by.at }); }
+    return guides;
+  }
+
+  _showGuides(guides) {
+    this.$overlay.querySelectorAll('.align-guide').forEach((e) => e.remove());
+    if (!guides || !guides.length) return;
+    const b = this.contentBBox(240), sw = 1 / this.view.k, col = (this._c && this._c.accent) || '#4d8dff';
+    for (const g of guides) {
+      const a = g.t === 'v'
+        ? { x1: g.at, y1: b.y, x2: g.at, y2: b.y + b.h }
+        : { x1: b.x, y1: g.at, x2: b.x + b.w, y2: g.at };
+      this.$overlay.appendChild(el('line', { class: 'align-guide', ...a, stroke: col, 'stroke-width': sw, 'stroke-dasharray': `${4 * sw} ${4 * sw}`, 'pointer-events': 'none', opacity: 0.95 }));
+    }
   }
 
   // ---------- history ----------
