@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=11';
-import { Editor } from './editor.js?v=11';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=11';
-import { iconSvg } from './icons.js?v=11';
-import { BRAND_ICONS } from './brands.js?v=11';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=11';
+import { initBackground } from './background.js?v=12';
+import { Editor } from './editor.js?v=12';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=12';
+import { iconSvg } from './icons.js?v=12';
+import { BRAND_ICONS } from './brands.js?v=12';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=12';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -167,15 +167,17 @@ document.querySelector('.topbar-actions').addEventListener('click', (e) => {
     case 'zoom-in': editor.zoomBy(1.2); break;
     case 'zoom-out': editor.zoomBy(1 / 1.2); break;
     case 'zoom-fit': editor.fitView(); break;
-    case 'grid': { const on = editor.toggleGrid(); btn.classList.toggle('is-on', on); break; }
-    case 'layout': editor.autoLayout(); toast('自動整列しました'); break;
-    case 'samples': { const m = $('#samples-menu'); m.hidden = !m.hidden; $('#theme-menu').hidden = true; $('#export-menu').hidden = true; break; }
-    case 'theme-menu': { const m = $('#theme-menu'); m.hidden = !m.hidden; $('#export-menu').hidden = true; $('#samples-menu').hidden = true; break; }
-    case 'save': saveFile(); break;
-    case 'load': $('#file-input').click(); break;
+    case 'grid': { const on = editor.toggleGrid(); btn.classList.toggle('is-on', on); document.querySelectorAll('[data-act="grid"]').forEach((g) => g.classList.toggle('is-on', on)); closeMenus(); break; }
+    case 'layout': editor.autoLayout(); toast('自動整列しました'); closeMenus(); break;
+    case 'samples': { const m = $('#samples-menu'); m.hidden = !m.hidden; $('#theme-menu').hidden = true; $('#export-menu').hidden = true; $('#more-menu') && ($('#more-menu').hidden = true); break; }
+    case 'theme-menu': { const m = $('#theme-menu'); m.hidden = !m.hidden; $('#export-menu').hidden = true; $('#samples-menu').hidden = true; $('#more-menu') && ($('#more-menu').hidden = true); break; }
+    case 'more': { const m = $('#more-menu'); m.hidden = !m.hidden; $('#theme-menu').hidden = true; $('#export-menu').hidden = true; $('#samples-menu').hidden = true; break; }
+    case 'save': saveFile(); closeMenus(); break;
+    case 'load': $('#file-input').click(); closeMenus(); break;
     case 'export': toggleExportMenu(); break;
   }
 });
+function closeMenus() { ['#export-menu', '#theme-menu', '#samples-menu', '#more-menu'].forEach((s) => { const m = $(s); if (m) m.hidden = true; }); }
 
 $('#export-menu').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-export]'); if (!b) return;
@@ -196,14 +198,15 @@ function toggleExportMenu() {
   m.hidden = !m.hidden;
 }
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.menu-wrap')) { $('#export-menu').hidden = true; $('#theme-menu').hidden = true; $('#samples-menu').hidden = true; }
+  if (!e.target.closest('.menu-wrap')) closeMenus();
 });
 
 $('#samples-menu').addEventListener('click', (e) => {
   const b = e.target.closest('[data-sample]'); if (!b) return;
-  $('#samples-menu').hidden = true;
-  editor.loadJSON(b.dataset.sample === 'integration' ? demoIntegration() : demoDiagram());
-  toast(b.dataset.sample === 'integration' ? '連携図サンプルを読み込みました' : '構成図サンプルを読み込みました', 'ok');
+  closeMenus();
+  const map = { arch: demoDiagram, microservices: demoMicroservices, serverless: demoServerless, dataplatform: demoDataPlatform, integration: demoIntegration };
+  editor.loadJSON((map[b.dataset.sample] || demoDiagram)());
+  toast('サンプルを読み込みました', 'ok');
 });
 
 $('#theme-menu').addEventListener('click', (e) => {
@@ -545,7 +548,89 @@ function demoDiagram() {
 }
 
 // integration / assembly diagram sample — showcases zones, bands, real logos,
-// bullet-list nodes, free-text annotations and orthogonal routing.
+// shared builder for sample diagrams
+function demoBuilder() {
+  let i = 100; const nid = () => 'n' + (++i);
+  const back = [], front = [], edges = []; let e = 0;
+  return {
+    zone: (x, y, w, h, label, c) => { const o = { id: nid(), type: 'zone', x, y, w, h, label, sub: '', color: c, shape: 'group' }; back.push(o); return o; },
+    band: (x, y, w, h, label, c) => { const o = { id: nid(), type: 'band', x, y, w, h, label, sub: '', color: c, shape: 'band' }; back.push(o); return o; },
+    banner: (x, y, w, label, c = '#4d8dff') => { const o = { id: nid(), type: 'banner', x, y, w, h: 52, label, sub: '', color: c, shape: 'banner' }; front.push(o); return o; },
+    node: (type, x, y, label, sub = '') => { const b = typeInfo(type); const o = { id: nid(), type, x, y, w: 188, h: 64, label: label ?? b.label, sub, color: b.color, shape: b.shape || 'card' }; front.push(o); return o; },
+    logo: (type, x, y, label) => { const b = typeInfo(type); const o = { id: nid(), type, x, y, w: 170, h: 56, label: label ?? b.label, sub: '', color: b.color, shape: 'card' }; front.push(o); return o; },
+    box: (x, y, label, w = 120) => { const o = { id: nid(), type: 'step', x, y, w, h: 44, label, sub: '', color: '#94a3b8', shape: 'plain' }; front.push(o); return o; },
+    list: (x, y, label, items, c = '#5b9dff') => { const o = { id: nid(), type: 'list', x, y, w: 180, h: 120, label, sub: items.join('\n'), color: c, shape: 'list' }; front.push(o); return o; },
+    txt: (x, y, label) => { const o = { id: nid(), type: 'text', x, y, w: 120, h: 24, label, sub: '', color: '#94a3b8', shape: 'text' }; front.push(o); return o; },
+    E: (from, to, label = '', style = 'solid', route = 'orthogonal', dir = 'forward') => { edges.push({ id: 'e' + (++e), from: from.id, to: to.id, label, style, dir, route, color: '' }); },
+    finish: () => { const order = [...back.map((o) => o.id), ...front.map((o) => o.id)]; const state = { nodes: {}, edges: {}, order, counter: 1000 }; [...back, ...front].forEach((o) => (state.nodes[o.id] = o)); edges.forEach((x) => (state.edges[x.id] = x)); return { version: 1, state }; },
+  };
+}
+
+// microservices architecture
+function demoMicroservices() {
+  const B = demoBuilder();
+  B.banner(40, 20, 380, 'マイクロサービス アーキテクチャ');
+  const cli = B.node('browser', 60, 150, 'クライアント', 'Web / モバイル');
+  const gw = B.node('gateway', 320, 150, 'API Gateway', '認証 / ルーティング');
+  const auth = B.logo('auth0', 336, 270, 'Auth0');
+  B.zone(560, 90, 460, 440, 'マイクロサービス', '#7c5cff');
+  const s1 = B.node('service', 580, 130, '注文サービス'); const d1 = B.node('db', 580, 224, '注文DB', 'PostgreSQL');
+  const s2 = B.node('service', 800, 130, '在庫サービス'); const d2 = B.node('db', 800, 224, '在庫DB', 'PostgreSQL');
+  const s3 = B.node('service', 580, 340, '決済サービス'); const d3 = B.node('db', 580, 434, '決済DB', 'PostgreSQL');
+  const s4 = B.node('service', 800, 340, '通知サービス');
+  const cache = B.node('cache', 1060, 130, 'キャッシュ', 'Redis');
+  const mq = B.node('queue', 1060, 224, 'メッセージング', 'Kafka');
+  const mon = B.logo('datadog', 1060, 330, 'Datadog');
+  const graf = B.logo('grafana', 1060, 410, 'Grafana');
+  B.E(cli, gw, 'HTTPS'); B.E(gw, auth, '検証', 'dashed');
+  [s1, s2, s3, s4].forEach((s) => B.E(gw, s));
+  B.E(s1, d1); B.E(s2, d2); B.E(s3, d3);
+  B.E(s1, mq, 'publish', 'dashed'); B.E(s2, mq, '', 'dashed'); B.E(mq, s4, 'consume', 'dashed');
+  B.E(s1, cache, '', 'dotted'); B.E(s2, cache, '', 'dotted'); B.E(s1, mon, 'metrics', 'dotted');
+  return B.finish();
+}
+
+// serverless / managed-cloud architecture
+function demoServerless() {
+  const B = demoBuilder();
+  B.banner(40, 20, 360, 'サーバーレス / クラウド構成');
+  const cli = B.node('browser', 60, 170, 'ユーザー', 'ブラウザ');
+  const cdn = B.logo('cloudflare', 300, 110, 'CDN');
+  const gw = B.node('gateway', 300, 210, 'API Gateway');
+  const auth = B.logo('auth0', 300, 330, 'Auth0');
+  B.zone(560, 90, 440, 320, 'サーバーレス', '#43d19e');
+  const f1 = B.node('function', 580, 130, '認証Fn'); const f2 = B.node('function', 790, 130, '注文Fn');
+  const f3 = B.node('function', 580, 230, '画像処理Fn'); const f4 = B.node('function', 790, 230, '集計Fn');
+  const q = B.node('queue', 580, 330, 'キュー', 'SQS');
+  const db = B.node('nosql', 1040, 120, 'NoSQL', 'DynamoDB');
+  const store = B.node('storage', 1040, 220, 'ストレージ', 'S3');
+  const mon = B.logo('datadog', 1040, 330, '監視');
+  B.E(cli, cdn); B.E(cdn, gw, 'assets'); B.E(cli, gw, 'HTTPS');
+  B.E(gw, f1); B.E(gw, f2); B.E(f1, auth, '', 'dashed');
+  B.E(f2, q, 'publish', 'dashed'); B.E(q, f4, 'consume', 'dashed');
+  B.E(f2, db); B.E(f3, store); B.E(f4, db, '', 'dotted');
+  return B.finish();
+}
+
+// data platform / analytics pipeline
+function demoDataPlatform() {
+  const B = demoBuilder();
+  B.banner(40, 20, 360, 'データ基盤 / 分析パイプライン');
+  B.zone(40, 90, 250, 320, 'データソース', '#5b9dff');
+  const s1 = B.logo('salesforce', 56, 124, 'Salesforce'); const s2 = B.logo('googleanalytics', 56, 192, 'GA4');
+  const s3 = B.logo('wordpress', 56, 260, 'WordPress'); const s4 = B.logo('stripe', 56, 328, 'Stripe');
+  B.zone(320, 90, 220, 320, '収集 / ETL', '#ffb454');
+  const ing = B.node('function', 336, 150, 'ETL', 'Airbyte'); const q = B.node('queue', 336, 260, 'ストリーム', 'Kafka');
+  B.zone(570, 90, 240, 320, '蓄積', '#43d19e');
+  const lake = B.node('storage', 586, 150, 'データレイク', 'S3'); const wh = B.logo('snowflake', 586, 260, 'Snowflake');
+  B.zone(840, 90, 240, 320, '分析 / BI', '#c084fc');
+  const bi1 = B.logo('tableau', 856, 150, 'Tableau'); const bi2 = B.logo('looker', 856, 260, 'Looker');
+  [s1, s2, s3, s4].forEach((s) => B.E(s, ing));
+  B.E(ing, q, '', 'dashed'); B.E(q, lake, '', 'dashed'); B.E(ing, lake); B.E(lake, wh, 'ロード'); B.E(wh, bi1); B.E(wh, bi2);
+  return B.finish();
+}
+
+// integration / assembly diagram sample
 function demoIntegration() {
   let i = 200; const nid = () => 'n' + (++i);
   const back = [], front = [];
