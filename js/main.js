@@ -485,53 +485,77 @@ function demoDiagram() {
   return { version: 1, state };
 }
 
-// integration / collaboration diagram sample (departments × SaaS × process boxes)
+// integration / assembly diagram sample — showcases zones, bands, real logos,
+// bullet-list nodes, free-text annotations and orthogonal routing.
 function demoIntegration() {
   let i = 200; const nid = () => 'n' + (++i);
   const back = [], front = [];
   const zone = (x, y, w, h, label, c) => { const o = { id: nid(), type: 'zone', x, y, w, h, label, sub: '', color: c, shape: 'group' }; back.push(o); return o; };
   const band = (x, y, w, h, label, c) => { const o = { id: nid(), type: 'band', x, y, w, h, label, sub: '', color: c, shape: 'band' }; back.push(o); return o; };
   const banner = (x, y, w, label, c) => { const o = { id: nid(), type: 'banner', x, y, w, h: 52, label, sub: '', color: c, shape: 'banner' }; front.push(o); return o; };
-  const box = (x, y, label) => { const o = { id: nid(), type: 'step', x, y, w: 120, h: 44, label, sub: '', color: '#94a3b8', shape: 'plain' }; front.push(o); return o; };
-  const logo = (x, y, type, label, c) => { const o = { id: nid(), type, x, y, w: 172, h: 56, label, sub: '', color: c, shape: 'card' }; front.push(o); return o; };
+  const box = (x, y, label, w = 120) => { const o = { id: nid(), type: 'step', x, y, w, h: 44, label, sub: '', color: '#94a3b8', shape: 'plain' }; front.push(o); return o; };
+  const logo = (x, y, type, label) => { const b = typeInfo(type); const o = { id: nid(), type, x, y, w: 170, h: 56, label: label ?? b.label, sub: '', color: b.color, shape: 'card' }; front.push(o); return o; };
+  const list = (x, y, label, items, c = '#4dd0e1') => { const o = { id: nid(), type: 'list', x, y, w: 178, h: 120, label, sub: items.join('\n'), color: c, shape: 'list' }; front.push(o); return o; };
+  const txt = (x, y, label) => { const o = { id: nid(), type: 'text', x, y, w: 120, h: 24, label, sub: '', color: '#94a3b8', shape: 'text' }; front.push(o); return o; };
 
-  banner(40, 22, 320, '全社DX システム連携図', '#4d8dff');
-  band(30, 300, 700, 258, 'Salesforce 基盤', '#4dd0e1');
-  zone(40, 96, 300, 196, 'マーケティング部門', '#5b9dff');
-  zone(380, 96, 330, 462, 'セールス部門', '#7c5cff');
-  zone(752, 118, 210, 306, 'バックオフィス', '#43d19e');
-  zone(984, 118, 250, 306, 'カスタマーサクセス', '#ffb454');
+  banner(40, 18, 400, '全社DX システム連携・組立図', '#4d8dff');
 
-  logo(60, 150, 'google', 'Google 広告', '#4285F4');
-  const mLead = box(70, 226, 'リード');
-  const mNur = box(210, 226, 'リード育成');
+  // ---- 共通領域 (comms / storage) ----
+  zone(40, 96, 230, 452, '共通領域 / コミュニケーション', '#4dd0e1');
+  logo(56, 132, 'slack', 'Slack');
+  logo(56, 200, 'zoom', 'Zoom / Meet');
+  logo(56, 268, 'box', 'Box');
+  const boxList = list(56, 332, '共有フォルダ', ['社内共有', '顧客フォルダ', '外部共有フォルダ']);
+  logo(56, 468, 'github', 'GitHub');
 
-  logo(398, 150, 'zoom', 'Zoom / Meet', '#2D8CFF');
-  logo(560, 150, 'salesforce', 'Salesforce', '#00A1E0');
-  const bTori = box(398, 330, '取引先');
-  const bTanto = box(398, 392, '取引先責任者');
-  const bSho = box(560, 330, '商談');
-  const bAct = box(560, 392, '活動履歴');
-  const bMi = box(560, 454, '見積り');
-  const bKe = box(560, 508, '契約');
+  // ---- マーケティング領域 ----
+  zone(300, 96, 250, 250, 'マーケティング領域', '#5b9dff');
+  logo(316, 132, 'googleanalytics', 'GA4');
+  logo(316, 200, 'wordpress', 'WordPress');
+  const mLead = box(316, 276, '問い合わせ');
+  const mDoc = box(446, 276, '資料DL', 96);
 
-  logo(760, 150, 'freee', 'freee 会計', '#007BE0');
-  const oSei = box(778, 240, '請求・売上');
-  const oShin = box(778, 302, '申請');
-  const oJu = box(778, 364, '受注承認');
+  // ---- HR領域 ----
+  zone(300, 372, 250, 176, 'HR領域', '#c084fc');
+  logo(316, 404, 'linkedin', 'LinkedIn');
+  logo(316, 472, 'indeed', 'Indeed');
 
-  logo(1000, 40, 'slack', 'Slack', '#611f69');
-  const cAnken = box(1006, 240, '案件');
-  const cChohyo = box(1006, 302, '帳票出力');
-  const cKosu = box(1006, 364, '工数管理');
+  // ---- セールス領域 (with Salesforce base band) ----
+  band(568, 116, 470, 452, 'Salesforce 基盤', '#00A1E0');
+  zone(580, 96, 450, 456, 'セールス領域', '#7c5cff');
+  logo(596, 132, 'salesforce', 'Salesforce');
+  logo(786, 132, 'hubspot', 'HubSpot');
+  const cards = list(596, 206, '名刺 / 会話データ', ['sansan 連携', 'リッチ化', 'リスク評価'], '#00A1E0');
+  const sLead = box(596, 344, 'リード');
+  const sTori = box(596, 404, '取引先');
+  const sTanto = box(596, 464, '取引先責任者');
+  const sSho = box(786, 344, '商談');
+  const sAct = box(786, 404, '活動履歴');
+  const sMi = box(786, 464, '見積り');
+  const sKe = box(916, 344, '契約');
+  const sChu = box(916, 404, '注文');
+  txt(724, 320, '商談更新');
+
+  // ---- バックオフィス領域 ----
+  zone(1064, 96, 240, 300, 'バックオフィス領域', '#43d19e');
+  logo(1080, 132, 'stripe', 'Stripe / 決済');
+  const oSei = box(1080, 210, '請求・売上');
+  const oShin = box(1080, 270, '申請');
+  const oJu = box(1080, 330, '受注承認');
+
+  // ---- 経営 / BI ----
+  zone(1064, 420, 240, 128, '経営判断 / BI', '#ffb454');
+  logo(1080, 452, 'tableau', 'Tableau');
+  txt(1080, 520, 'アカウント毎の見込み金額');
 
   const edges = []; let e = 0;
   const E = (from, to, label = '', style = 'solid', dir = 'forward') => edges.push({ id: 'e' + (++e), from: from.id, to: to.id, label, style, dir, route: 'orthogonal', color: '' });
-  E(mLead, mNur, '育成'); E(mNur, bTori, '引き渡し');
-  E(bTori, bSho); E(bTanto, bSho); E(bSho, bAct); E(bAct, bMi); E(bMi, bKe);
-  E(bKe, oSei, '受注', 'dashed'); E(oSei, oShin); E(oShin, oJu);
-  E(oJu, cAnken, '案件化', 'dashed'); E(cAnken, cChohyo); E(cChohyo, cKosu);
-  E(bSho, cAnken, '通知', 'dotted');
+  E(mLead, sLead, '集客'); E(mDoc, sLead, '', 'dashed');
+  E(cards, sTori, '取込', 'dashed');
+  E(sLead, sTori); E(sTori, sSho); E(sTanto, sSho); E(sSho, sAct); E(sAct, sMi); E(sMi, sKe); E(sKe, sChu);
+  E(sKe, oSei, '受注', 'dashed'); E(oSei, oShin); E(oShin, oJu);
+  E(boxList, sSho, '議事録', 'dotted');
+  E(oSei, cards, '', 'dotted', 'none');
 
   const order = [...back.map((o) => o.id), ...front.map((o) => o.id)];
   const state = { nodes: {}, edges: {}, order, counter: 400 };
