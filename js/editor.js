@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=8';
-import { typeInfo } from './nodes.js?v=8';
-import { BRAND_ICONS } from './brands.js?v=8';
+import { ICONS } from './icons.js?v=9';
+import { typeInfo } from './nodes.js?v=9';
+import { BRAND_ICONS } from './brands.js?v=9';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -396,8 +396,19 @@ export class Editor {
     let drag = null; // {mode, ...}
     const svg = this.svg;
     const capture = (id) => { try { svg.setPointerCapture(id); } catch {} };
+    const ptrs = new Map();   // active pointers for pinch-zoom / two-finger pan
+    let pinch = null;
 
     svg.addEventListener('pointerdown', (e) => {
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 2) {                     // second finger → start pinch, abandon single drag
+        if (this._tempLink) { this._tempLink.remove(); this._tempLink = null; }
+        drag = null; svg.classList.remove('panning', 'linking');
+        const [a, b] = [...ptrs.values()];
+        pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, mid0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, view0: { ...this.view } };
+        capture(e.pointerId); return;
+      }
+      if (ptrs.size > 2) return;
       if (e.button === 1 || (e.button === 0 && this._space)) { // pan
         drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, tx: this.view.tx, ty: this.view.ty };
         svg.classList.add('panning'); capture(e.pointerId); return;
@@ -448,6 +459,21 @@ export class Editor {
     });
 
     svg.addEventListener('pointermove', (e) => {
+      if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && ptrs.size >= 2) {            // pinch-zoom + two-finger pan
+        const [a, b] = [...ptrs.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const r = this.svg.getBoundingClientRect();
+        const sx = pinch.mid0.x - r.left, sy = pinch.mid0.y - r.top;
+        const k2 = clamp(pinch.view0.k * (d / pinch.d0), 0.15, 3.5);
+        const f = k2 / pinch.view0.k;
+        this.view.tx = sx - (sx - pinch.view0.tx) * f + (mid.x - pinch.mid0.x);
+        this.view.ty = sy - (sy - pinch.view0.ty) * f + (mid.y - pinch.mid0.y);
+        this.view.k = k2;
+        this._applyView();
+        return;
+      }
       if (!drag) { return; }
       if (drag.mode === 'pan') {
         this.view.tx = drag.tx + (e.clientX - drag.sx);
@@ -486,7 +512,9 @@ export class Editor {
     });
 
     const end = (e) => {
-      if (!drag) return;
+      ptrs.delete(e.pointerId);
+      if (ptrs.size < 2) pinch = null;
+      if (!drag) { svg.classList.remove('panning', 'linking'); return; }
       if (drag.mode === 'node' && drag.moved) { this.render(); this._pushHistory(); }
       if (drag.mode === 'resize' && drag.moved) { this._pushHistory(); }
       if (drag.mode === 'link') {

@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=8';
-import { Editor } from './editor.js?v=8';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=8';
-import { iconSvg } from './icons.js?v=8';
-import { BRAND_ICONS } from './brands.js?v=8';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=8';
+import { initBackground } from './background.js?v=9';
+import { Editor } from './editor.js?v=9';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=9';
+import { iconSvg } from './icons.js?v=9';
+import { BRAND_ICONS } from './brands.js?v=9';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=9';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -539,6 +539,22 @@ function demoIntegration() {
   edges.forEach((x) => (state.edges[x.id] = x));
   return { version: 1, state };
 }
+
+/* ---------------- mobile drawers ---------------- */
+const backdrop = $('#drawer-backdrop');
+function openDrawer(which) {
+  $('#palette').classList.toggle('open', which === 'palette');
+  $('#inspector').classList.toggle('open', which === 'inspector');
+  backdrop.classList.toggle('show', !!which);
+}
+const closeDrawers = () => openDrawer(null);
+$('#fab-parts').addEventListener('click', () => openDrawer($('#palette').classList.contains('open') ? null : 'palette'));
+$('#fab-insp').addEventListener('click', () => openDrawer($('#inspector').classList.contains('open') ? null : 'inspector'));
+backdrop.addEventListener('click', closeDrawers);
+// placing a part from the drawer closes it so the canvas is visible
+$('#palette-body').addEventListener('click', (e) => { if (e.target.closest('.pal-item')) setTimeout(closeDrawers, 80); });
+// pulse the edit FAB when a node/edge is selected
+editor.on('select', (sel) => $('#fab-insp').classList.toggle('has-sel', !!(sel && sel.kind)));
 
 /* ---------------- boot ---------------- */
 if (!editor.loadAutosave()) {
