@@ -37,7 +37,7 @@ export function buildSVG(editor, opts = {}) {
 
   // nodes: drop ports and selection rings
   const nodes = editor.$nodes.cloneNode(true);
-  nodes.querySelectorAll('.ports, .sel-ring').forEach((e) => e.remove());
+  nodes.querySelectorAll('.ports, .sel-ring, .resize-handle').forEach((e) => e.remove());
 
   const bg = opts.background === false ? ''
     : `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${C.canvas}"/>`;

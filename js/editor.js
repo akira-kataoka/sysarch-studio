@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=7';
-import { typeInfo } from './nodes.js?v=7';
-import { BRAND_ICONS } from './brands.js?v=7';
+import { ICONS } from './icons.js?v=8';
+import { typeInfo } from './nodes.js?v=8';
+import { BRAND_ICONS } from './brands.js?v=8';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -85,13 +85,14 @@ export class Editor {
     const info = typeInfo(type);
     const shape = info.shape || 'card';
     const id = this._id('n');
-    const [w, h] = ({ group: [320, 200], band: [460, 300], banner: [320, 52], plain: [150, 46] }[shape]) || [NODE_W, NODE_H];
+    const [w, h] = ({ group: [320, 200], band: [460, 300], banner: [320, 52], plain: [150, 46], text: [150, 30], list: [200, 120] }[shape]) || [NODE_W, NODE_H];
     const backLayer = shape === 'group' || shape === 'band';
     const node = {
       id, type, x: snap(x - w / 2), y: snap(y - h / 2), w, h,
       label: opts.label ?? info.label, sub: opts.sub ?? '', color: opts.color ?? info.color,
       shape,
     };
+    if (opts.img) node.img = opts.img;
     this.state.nodes[id] = node;
     if (backLayer) this.state.order.unshift(id); else this.state.order.push(id);
     this._pushHistory();
@@ -195,6 +196,9 @@ export class Editor {
       if (g && n) {
         const ring = el('rect', { class: 'sel-ring', x: -4, y: -4, width: n.w + 8, height: n.h + 8, rx: 18, fill: 'none', stroke: (this._c && this._c.accent) || '#7c5cff', 'stroke-width': 2, 'stroke-dasharray': '6 5', opacity: 0.9 });
         g.insertBefore(ring, g.firstChild);
+        if (['card', 'plain', 'banner', 'group', 'band'].includes(n.shape || 'card')) {
+          g.appendChild(el('rect', { class: 'resize-handle', x: n.w - 6, y: n.h - 6, width: 14, height: 14, rx: 3, fill: (this._c && this._c.accent) || '#7c5cff', stroke: '#fff', 'stroke-width': 1.5, 'data-id': n.id }));
+        }
       }
     }
   }
@@ -260,20 +264,59 @@ export class Editor {
       return this._withPorts(g, n);
     }
 
+    // ---- free text / annotation: no box, auto-sized, selectable via invisible hit area ----
+    if (shape === 'text') {
+      const auto = (n.color === info.color);
+      const fill = auto ? C.nodeText : n.color;
+      const lines = String(n.label || 'テキスト').split('\n');
+      const fs = 14, lh = 19;
+      const longest = Math.max(1, ...lines.map((l) => l.length));
+      n.w = Math.max(40, Math.round(longest * fs * 0.72) + 8);
+      n.h = Math.max(22, lines.length * lh + 6);
+      g.appendChild(el('rect', { width: n.w, height: n.h, fill: 'transparent' }));
+      lines.forEach((ln, i) => { const t = text(2, 16 + i * lh, ln, 'node-title', fill); t.setAttribute('font-size', fs); g.appendChild(t); });
+      return g;
+    }
+
+    // ---- bullet list: header + body lines (from sub, newline-separated), auto height ----
+    if (shape === 'list') {
+      const lines = String(n.sub || '').split('\n').filter((x) => x.trim() !== '');
+      const headerH = 30, lineH = 20, padB = 10;
+      n.h = headerH + Math.max(1, lines.length) * lineH + padB;
+      g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 10, fill: C.nodeBg, stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.6, filter: 'url(#node-shadow)' }));
+      g.appendChild(el('rect', { class: 'grp-head', width: n.w, height: headerH, rx: 10, fill: mix(n.color, 16) }));
+      g.appendChild(el('rect', { class: 'grp-head', y: headerH - 10, width: n.w, height: 10, fill: mix(n.color, 16) }));
+      g.appendChild(text(12, 20, n.label, 'node-title', C.nodeText));
+      lines.forEach((ln, i) => {
+        const cy = headerH + 6 + i * lineH;
+        g.appendChild(el('circle', { cx: 16, cy: cy + 4, r: 2.6, fill: n.color }));
+        g.appendChild(text(26, cy + 8, ln, 'node-sub', C.nodeSub));
+      });
+      return this._withPorts(g, n);
+    }
+
     // ---- default card (icon badge + title + subtitle); logo tiles use a filled initial chip ----
     g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 14, fill: C.nodeBg, stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.45, filter: 'url(#node-shadow)' }));
     g.appendChild(el('rect', { x: 0, y: 0, width: 4, height: n.h, rx: 2, fill: n.color }));
     const by = (n.h - 36) / 2;
     if (info.logo) {
-      // brand icon (Simple Icons, CC0) on a brand-color tile; initials when no icon exists
       const bi = BRAND_ICONS[n.type];
-      const col = bi ? bi.hex : n.color;
-      g.appendChild(el('rect', { x: 14, y: by, width: 36, height: 36, rx: 9, fill: col }));
-      if (bi) {
+      if (n.img) {
+        // user-uploaded image (data URI → self-contained, export-safe, no canvas taint)
+        g.appendChild(el('rect', { x: 14, y: by, width: 36, height: 36, rx: 9, fill: '#ffffff' }));
+        const im = el('image', { x: 15, y: by + 1, width: 34, height: 34, preserveAspectRatio: 'xMidYMid meet' });
+        im.setAttribute('href', n.img);
+        im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', n.img);
+        g.appendChild(im);
+      } else if (bi) {
+        // brand icon (Simple Icons, CC0) on a brand-color tile
+        g.appendChild(el('rect', { x: 14, y: by, width: 36, height: 36, rx: 9, fill: bi.hex }));
         const ic = el('g', { transform: `translate(${14 + 8} ${by + 8}) scale(${20 / 24})`, fill: '#ffffff' });
         ic.innerHTML = `<path d="${bi.path}"/>`;
         g.appendChild(ic);
       } else {
+        // no icon available → initials chip on the node's color
+        g.appendChild(el('rect', { x: 14, y: by, width: 36, height: 36, rx: 9, fill: n.color }));
         const in2 = text(32, by + 24, initials(n.label), 'node-title', '#ffffff');
         in2.setAttribute('text-anchor', 'middle'); in2.setAttribute('font-size', '13'); g.appendChild(in2);
       }
@@ -360,10 +403,19 @@ export class Editor {
         svg.classList.add('panning'); capture(e.pointerId); return;
       }
       if (e.button !== 0) return;
+      const handleEl = e.target.closest('.resize-handle');
       const portEl = e.target.closest('.port');
       const nodeEl = e.target.closest('.node-g');
       const edgeEl = e.target.closest('.edge-g');
 
+      if (handleEl) {
+        const id = handleEl.dataset.id;
+        const n = this.state.nodes[id]; if (!n) return;
+        const w = this.screenToWorld(e.clientX, e.clientY);
+        drag = { mode: 'resize', id, sw: n.w, sh: n.h, ox: w.x, oy: w.y, moved: false };
+        capture(e.pointerId);
+        return;
+      }
       if (portEl) {
         const id = portEl.dataset.id;
         const start = { x: this.state.nodes[id].x + (+portEl.dataset.px), y: this.state.nodes[id].y + (+portEl.dataset.py) };
@@ -419,6 +471,14 @@ export class Editor {
             this._updateNodeEdges(c.id);
           }
         }
+      } else if (drag.mode === 'resize') {
+        const w = this.screenToWorld(e.clientX, e.clientY);
+        const n = this.state.nodes[drag.id];
+        const big = n.shape === 'group' || n.shape === 'band';
+        n.w = Math.max(big ? 120 : 70, snap(drag.sw + (w.x - drag.ox)));
+        n.h = Math.max(big ? 80 : 34, snap(drag.sh + (w.y - drag.oy)));
+        drag.moved = true;
+        this.render();
       } else if (drag.mode === 'link') {
         const w = this.screenToWorld(e.clientX, e.clientY);
         this._tempLink.setAttribute('d', curve({ x: drag.start.x, y: drag.start.y, dir: { x: 0, y: 0 } }, { x: w.x, y: w.y, dir: { x: 0, y: 0 } }));
@@ -428,6 +488,7 @@ export class Editor {
     const end = (e) => {
       if (!drag) return;
       if (drag.mode === 'node' && drag.moved) { this.render(); this._pushHistory(); }
+      if (drag.mode === 'resize' && drag.moved) { this._pushHistory(); }
       if (drag.mode === 'link') {
         this._tempLink?.remove(); this._tempLink = null;
         const tgt = document.elementFromPoint(e.clientX, e.clientY);

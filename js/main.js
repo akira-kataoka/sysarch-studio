@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=7';
-import { Editor } from './editor.js?v=7';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=7';
-import { iconSvg } from './icons.js?v=7';
-import { BRAND_ICONS } from './brands.js?v=7';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=7';
+import { initBackground } from './background.js?v=8';
+import { Editor } from './editor.js?v=8';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=8';
+import { iconSvg } from './icons.js?v=8';
+import { BRAND_ICONS } from './brands.js?v=8';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=8';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -17,6 +17,31 @@ const palInitials = (s) => {
 const svg = $('#canvas');
 const editor = new Editor(svg);
 window.__editor = editor; // debug / tooling handle
+
+// pick an image file → data URI (raster downscaled to 128px; SVG kept as-is). Self-contained, export-safe.
+function pickImage(cb) {
+  const inp = $('#img-input');
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0]; inp.value = '';
+    if (!f) return;
+    const reader = new FileReader();
+    if (f.type === 'image/svg+xml') { reader.onload = () => cb(reader.result); reader.readAsDataURL(f); return; }
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 128, s = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * s)); c.height = Math.max(1, Math.round(img.height * s));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        try { cb(c.toDataURL('image/png')); } catch { cb(reader.result); }
+      };
+      img.onerror = () => cb(reader.result);
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(f);
+  };
+  inp.click();
+}
 
 /* ---------------- theme + background ---------------- */
 let bg = { setTheme() {}, setPalette() {} };
@@ -74,11 +99,13 @@ function buildPalette() {
       <div class="pal-items">
         ${g.types.map((t) => `
           <div class="pal-item" draggable="true" data-type="${t.id}" style="--ncolor:${t.color}" title="${t.label}">
-            ${t.logo
-              ? (BRAND_ICONS[t.id]
-                  ? `<div class="pi-icon pi-logo" style="background:${BRAND_ICONS[t.id].hex};border-color:${BRAND_ICONS[t.id].hex}"><svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="${BRAND_ICONS[t.id].path}"/></svg></div>`
-                  : `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color}">${palInitials(t.label)}</div>`)
-              : `<div class="pi-icon">${iconSvg(t.icon, 18)}</div>`}
+            ${t.upload
+              ? `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color};font-size:18px">＋</div>`
+              : t.logo
+                ? (BRAND_ICONS[t.id]
+                    ? `<div class="pi-icon pi-logo" style="background:${BRAND_ICONS[t.id].hex};border-color:${BRAND_ICONS[t.id].hex}"><svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="${BRAND_ICONS[t.id].path}"/></svg></div>`
+                    : `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color}">${palInitials(t.label)}</div>`)
+                : `<div class="pi-icon">${iconSvg(t.icon, 18)}</div>`}
             <div class="pi-label">${t.label}</div>
           </div>`).join('')}
       </div>
@@ -90,12 +117,17 @@ function buildPalette() {
       e.dataTransfer.setData('text/plain', item.dataset.type);
       e.dataTransfer.effectAllowed = 'copy';
     });
-    // click to drop at center
+    // click to drop at center (upload types open an image picker first)
     item.addEventListener('click', () => {
+      const type = item.dataset.type;
       const r = svg.getBoundingClientRect();
       const w = editor.screenToWorld(r.left + r.width / 2, r.top + r.height / 2);
-      editor.addNode(item.dataset.type, w.x, w.y);
-      toast(`「${typeInfo(item.dataset.type).label}」を追加`);
+      if (TYPE_MAP[type].upload) {
+        pickImage((uri) => { editor.addNode(type, w.x, w.y, { img: uri, label: 'サービス' }); toast('画像を配置しました'); });
+        return;
+      }
+      editor.addNode(type, w.x, w.y);
+      toast(`「${typeInfo(type).label}」を追加`);
     });
   });
 }
@@ -203,15 +235,28 @@ function swatchRow(active) {
 function renderNodeInspector(n) {
   if (!n) return;
   const info = typeInfo(n.type);
+  const isText = n.shape === 'text';
+  const isList = n.shape === 'list';
+  const isLogo = info.logo || n.img;
+  const labelField = isText
+    ? `<textarea id="f-label" rows="2" placeholder="テキスト（改行可）">${esc(n.label)}</textarea>`
+    : `<input id="f-label" type="text" value="${esc(n.label)}" />`;
+  const subField = isText ? '' : (isList
+    ? `<div class="field"><label>項目（1行に1つ）</label><textarea id="f-sub" rows="5" placeholder="社内共有&#10;顧客フォルダ&#10;外部共有フォルダ">${esc(n.sub)}</textarea></div>`
+    : `<div class="field"><label>補足（サブテキスト）</label><input id="f-sub" type="text" value="${esc(n.sub)}" placeholder="例: Nginx / t3.medium" /></div>`);
   inspBody.innerHTML = `
     <div class="insp-section">
       <h3>${info.groupTitle || 'ノード'} · ${info.label}</h3>
-      <div class="field"><label>ラベル</label><input id="f-label" type="text" value="${esc(n.label)}" /></div>
-      <div class="field"><label>補足（サブテキスト）</label><input id="f-sub" type="text" value="${esc(n.sub)}" placeholder="例: Nginx / t3.medium" /></div>
+      <div class="field"><label>${isList ? 'タイトル' : 'ラベル'}</label>${labelField}</div>
+      ${subField}
       <div class="field"><label>種別</label><select id="f-type">
         ${GROUPS.map((g) => `<optgroup label="${g.title}">${g.types.map((t) =>
           `<option value="${t.id}"${t.id === n.type ? ' selected' : ''}>${t.label}</option>`).join('')}</optgroup>`).join('')}
       </select></div>
+      ${isLogo ? `<div class="field"><label>ロゴ画像</label><div class="btn-row">
+        <button class="chip-btn" data-op="img">🖼 画像を選択</button>
+        ${n.img ? '<button class="chip-btn" data-op="img-clear">画像を消す</button>' : ''}
+      </div></div>` : ''}
     </div>
     <div class="insp-section">
       <h3>アクセント色</h3>
@@ -228,8 +273,7 @@ function renderNodeInspector(n) {
   const label = $('#f-label', inspBody), sub = $('#f-sub', inspBody), type = $('#f-type', inspBody);
   label.addEventListener('input', () => editor.applyPatch({ label: label.value }, false));
   label.addEventListener('change', () => editor.commit());
-  sub.addEventListener('input', () => editor.applyPatch({ sub: sub.value }, false));
-  sub.addEventListener('change', () => editor.commit());
+  if (sub) { sub.addEventListener('input', () => editor.applyPatch({ sub: sub.value }, false)); sub.addEventListener('change', () => editor.commit()); }
   type.addEventListener('change', () => { editor.updateSelected({ type: type.value }); });
 
   inspBody.querySelectorAll('.swatch').forEach((s) => s.addEventListener('click', () => {
@@ -299,6 +343,8 @@ function bindOps() {
   inspBody.querySelectorAll('[data-op]').forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.op === 'del') editor.deleteSelected();
     else if (b.dataset.op === 'dup') editor.duplicateSelected();
+    else if (b.dataset.op === 'img') pickImage((uri) => { editor.applyPatch({ img: uri }); editor.emit('select', editor.sel); });
+    else if (b.dataset.op === 'img-clear') { editor.applyPatch({ img: '' }); editor.emit('select', editor.sel); }
   }));
 }
 
