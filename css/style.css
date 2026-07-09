@@ -3,27 +3,27 @@
    ============================================================ */
 
 :root {
-  /* dark (default) */
-  --bg-0: #0b0d13;
-  --bg-1: #10131c;
-  --panel: rgba(22, 26, 38, 0.72);
-  --panel-solid: #161a26;
-  --stroke: rgba(255, 255, 255, 0.08);
-  --stroke-strong: rgba(255, 255, 255, 0.16);
-  --text: #e7eaf3;
-  --text-dim: #9aa3b8;
-  --text-faint: #626b82;
-  --accent: #7c5cff;
-  --accent-2: #4dd0e1;
-  --accent-soft: rgba(124, 92, 255, 0.16);
+  /* dark (default) — "Midnight Blueprint": cool technical drafting-table blue */
+  --bg-0: #060a14;
+  --bg-1: #0a101f;
+  --panel: rgba(13, 21, 38, 0.72);
+  --panel-solid: #0e1626;
+  --stroke: rgba(148, 186, 255, 0.09);
+  --stroke-strong: rgba(148, 186, 255, 0.20);
+  --text: #e4edfb;
+  --text-dim: #8fa3c6;
+  --text-faint: #57678c;
+  --accent: #4d8dff;
+  --accent-2: #38d5c0;
+  --accent-soft: rgba(77, 141, 255, 0.15);
   --danger: #ff5c7c;
   --ok: #43d19e;
-  --grid-dot: rgba(255, 255, 255, 0.10);
-  --canvas-bg: #0c0f17;
-  --node-bg: #1a1f2e;
-  --node-text: #eef1f8;
-  --node-sub: #98a2ba;
-  --edge: #7f8aa8;
+  --grid-dot: rgba(122, 164, 255, 0.13);
+  --canvas-bg: #070c18;
+  --node-bg: #101a2e;
+  --node-text: #edf4ff;
+  --node-sub: #8aa1c8;
+  --edge: #6f8db9;
   --shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.6);
   --radius: 14px;
   --sp: 8px;
@@ -39,9 +39,9 @@
   --text: #1a1f2e;
   --text-dim: #59617a;
   --text-faint: #8a92a8;
-  --accent: #6b4bff;
+  --accent: #2f6fe0;
   --accent-2: #12a3bb;
-  --accent-soft: rgba(107, 75, 255, 0.12);
+  --accent-soft: rgba(47, 111, 224, 0.12);
   --grid-dot: rgba(20, 30, 60, 0.12);
   --canvas-bg: #f3f5fb;
   --node-bg: #ffffff;
@@ -65,13 +65,13 @@ body {
 .bg-veil {
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
   background:
-    radial-gradient(1200px 700px at 78% -10%, rgba(124,92,255,0.16), transparent 60%),
-    radial-gradient(900px 600px at 10% 110%, rgba(77,208,225,0.12), transparent 55%),
-    linear-gradient(180deg, rgba(8,10,16,0.30), rgba(8,10,16,0.55));
+    radial-gradient(1100px 700px at 18% -10%, rgba(56,110,255,0.20), transparent 60%),
+    radial-gradient(900px 620px at 85% 112%, rgba(45,180,205,0.12), transparent 55%),
+    linear-gradient(180deg, rgba(4,7,15,0.62), rgba(4,7,15,0.88));
 }
 :root[data-theme="light"] .bg-veil {
   background:
-    radial-gradient(1200px 700px at 78% -10%, rgba(107,75,255,0.10), transparent 60%),
+    radial-gradient(1200px 700px at 78% -10%, rgba(47,111,224,0.10), transparent 60%),
     radial-gradient(900px 600px at 10% 110%, rgba(18,163,187,0.08), transparent 55%),
     linear-gradient(180deg, rgba(240,243,250,0.35), rgba(230,234,244,0.5));
 }
@@ -106,7 +106,7 @@ body {
   box-shadow: var(--shadow);
 }
 .brand { display: flex; align-items: center; gap: 10px; padding-right: 8px; }
-.brand-mark { display: grid; place-items: center; filter: drop-shadow(0 4px 12px rgba(124,92,255,0.4)); }
+.brand-mark { display: grid; place-items: center; filter: drop-shadow(0 4px 12px rgba(60,130,255,0.42)); }
 .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
 .brand-text strong { font-size: 14px; letter-spacing: 0.2px; }
 .brand-text span { font-size: 10px; color: var(--text-faint); letter-spacing: 0.6px; text-transform: uppercase; }
@@ -131,8 +131,8 @@ body {
 
 .primary-btn {
   height: 32px; padding: 0 14px; font-size: 12.5px; font-weight: 600;
-  background: linear-gradient(135deg, var(--accent), #6a53e0);
-  color: #fff; box-shadow: 0 6px 18px -6px rgba(124,92,255,0.7);
+  background: linear-gradient(135deg, #4d8dff, #3aa8d4);
+  color: #fff; box-shadow: 0 6px 18px -6px rgba(60,130,255,0.6);
 }
 .primary-btn:hover { filter: brightness(1.08); }
 

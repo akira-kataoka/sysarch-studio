@@ -116,11 +116,11 @@ export async function initBackground() {
   return {
     setTheme(theme) {
       if (theme === 'light') {
-        ptsMat.color.set('#6b4bff'); ptsMat.opacity = 0.55;
+        ptsMat.color.set('#2f6fe0'); ptsMat.opacity = 0.55;
         linkMat.color.set('#12a3bb'); linkMat.opacity = 0.10;
       } else {
-        ptsMat.color.set('#8b6dff'); ptsMat.opacity = 0.9;
-        linkMat.color.set('#4dd0e1'); linkMat.opacity = 0.16;
+        ptsMat.color.set('#4d8dff'); ptsMat.opacity = 0.9;
+        linkMat.color.set('#38d5c0'); linkMat.opacity = 0.16;
       }
     },
   };
