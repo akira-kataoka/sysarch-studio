@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=22';
-import { Editor } from './editor.js?v=22';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=22';
-import { iconSvg } from './icons.js?v=22';
-import { BRAND_ICONS } from './brands.js?v=22';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=22';
+import { initBackground } from './background.js?v=23';
+import { Editor } from './editor.js?v=23';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=23';
+import { iconSvg } from './icons.js?v=23';
+import { BRAND_ICONS } from './brands.js?v=23';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=23';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -221,18 +221,21 @@ helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay || e
 if (!localStorage.getItem('sysarch:seenhelp')) { try { localStorage.setItem('sysarch:seenhelp', '1'); } catch {} setTimeout(openHelp, 800); }
 function closeMenus() { ['#export-menu', '#theme-menu', '#samples-menu', '#more-menu'].forEach((s) => { const m = $(s); if (m) m.hidden = true; }); }
 
-const exportOpts = { background: true, selectionOnly: false };
+const PAD_PRESETS = [{ v: 0, l: 'なし' }, { v: 24, l: '小' }, { v: 48, l: '標準' }, { v: 96, l: '大' }];
+const exportOpts = { background: true, selectionOnly: false, pad: 48 };
 function refreshExportOpts() {
   const bt = $('#exopt-bg'); if (bt) bt.classList.toggle('is-checked', exportOpts.background);
   const st = $('#exopt-sel'); if (st) st.classList.toggle('is-checked', exportOpts.selectionOnly);
+  const pt = $('#exopt-pad'); if (pt) { const cur = PAD_PRESETS.find((p) => p.v === exportOpts.pad) || PAD_PRESETS[2]; pt.innerHTML = `余白: ${cur.l} <em>クリックで なし/小/標準/大</em>`; }
 }
 refreshExportOpts();
 
 $('#export-menu').addEventListener('click', async (e) => {
   const opt = e.target.closest('[data-exopt]');
-  if (opt) {                                                                    // toggle option, keep menu open
+  if (opt) {                                                                    // toggle/cycle option, keep menu open
     if (opt.dataset.exopt === 'bg') exportOpts.background = !exportOpts.background;
     else if (opt.dataset.exopt === 'sel') exportOpts.selectionOnly = !exportOpts.selectionOnly;
+    else if (opt.dataset.exopt === 'pad') { const i = PAD_PRESETS.findIndex((p) => p.v === exportOpts.pad); exportOpts.pad = PAD_PRESETS[(i + 1) % PAD_PRESETS.length].v; }
     refreshExportOpts(); return;
   }
   const b = e.target.closest('[data-export]'); if (!b) return;
@@ -241,7 +244,7 @@ $('#export-menu').addEventListener('click', async (e) => {
   if (!Object.keys(editor.state.nodes).length) { toast('図が空です', 'err'); return; }
   if (exportOpts.selectionOnly && !editor.selNodes.size) { toast('ノードを選択してください（選択範囲のみが有効）', 'err'); return; }
   const only = (exportOpts.selectionOnly && editor.selNodes.size) ? editor.selNodes : null;
-  const o = { background: exportOpts.background, only };
+  const o = { background: exportOpts.background, only, pad: exportOpts.pad };
   try {
     if (kind === 'svg') { exportSVG(editor, o); toast('SVG を書き出しました', 'ok'); }
     else if (kind === 'png') { await exportPNG(editor, 2, o); toast('PNG (2x) を書き出しました', 'ok'); }
