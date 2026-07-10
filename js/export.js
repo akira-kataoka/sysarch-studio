@@ -16,10 +16,19 @@ const FONT_CSS =
   `.node-sub{font-weight:400;font-size:10.5px;}` +
   `.edge-label{font-weight:500;font-size:11px;}`;
 
-// Build a self-contained SVG string of the current diagram.
+// bounding box over a set of node ids
+function bboxOf(editor, only, pad) {
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (const id of only) { const n = editor.state.nodes[id]; if (!n) continue; minx = Math.min(minx, n.x); miny = Math.min(miny, n.y); maxx = Math.max(maxx, n.x + n.w); maxy = Math.max(maxy, n.y + n.h); }
+  if (!isFinite(minx)) return editor.contentBBox(pad);
+  return { x: minx - pad, y: miny - pad, w: (maxx - minx) + pad * 2, h: (maxy - miny) + pad * 2 };
+}
+
+// Build a self-contained SVG string of the current diagram (opts.only = Set of node ids → crop to selection).
 export function buildSVG(editor, opts = {}) {
   const pad = opts.pad ?? 48;
-  const b = editor.contentBBox(pad);
+  const only = (opts.only && opts.only.size) ? opts.only : null;
+  const b = only ? bboxOf(editor, only, pad) : editor.contentBBox(pad);
   const C = themeColors();
   const ser = new XMLSerializer();
 
@@ -31,13 +40,15 @@ export function buildSVG(editor, opts = {}) {
   const edges = editor.$edges.cloneNode(true);
   edges.querySelectorAll('.edge-hit').forEach((e) => e.remove());
   edges.querySelectorAll('.edge-g').forEach((g) => {
+    if (only && (!only.has(g.dataset.from) || !only.has(g.dataset.to))) { g.remove(); return; }
     const line = g.querySelector('.edge-line');
     if (line) { line.setAttribute('stroke', g.dataset.color || C.edge); line.setAttribute('stroke-width', 2); line.removeAttribute('style'); }
   });
 
-  // nodes: drop ports and selection rings
+  // nodes: drop ports and selection rings (and any node not in the selection when cropping)
   const nodes = editor.$nodes.cloneNode(true);
   nodes.querySelectorAll('.ports, .sel-ring, .resize-handle').forEach((e) => e.remove());
+  if (only) nodes.querySelectorAll('.node-g').forEach((g) => { if (!only.has(g.dataset.id)) g.remove(); });
 
   const bg = opts.background === false ? ''
     : `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${C.canvas}"/>`;

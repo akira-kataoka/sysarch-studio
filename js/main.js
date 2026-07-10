@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=19';
-import { Editor } from './editor.js?v=19';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=19';
-import { iconSvg } from './icons.js?v=19';
-import { BRAND_ICONS } from './brands.js?v=19';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=19';
+import { initBackground } from './background.js?v=20';
+import { Editor } from './editor.js?v=20';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=20';
+import { iconSvg } from './icons.js?v=20';
+import { BRAND_ICONS } from './brands.js?v=20';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=20';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -199,23 +199,32 @@ helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay || e
 if (!localStorage.getItem('sysarch:seenhelp')) { try { localStorage.setItem('sysarch:seenhelp', '1'); } catch {} setTimeout(openHelp, 800); }
 function closeMenus() { ['#export-menu', '#theme-menu', '#samples-menu', '#more-menu'].forEach((s) => { const m = $(s); if (m) m.hidden = true; }); }
 
-const exportOpts = { background: true };
-function refreshExportOpts() { const bt = $('#exopt-bg'); if (bt) bt.classList.toggle('is-checked', exportOpts.background); }
+const exportOpts = { background: true, selectionOnly: false };
+function refreshExportOpts() {
+  const bt = $('#exopt-bg'); if (bt) bt.classList.toggle('is-checked', exportOpts.background);
+  const st = $('#exopt-sel'); if (st) st.classList.toggle('is-checked', exportOpts.selectionOnly);
+}
 refreshExportOpts();
 
 $('#export-menu').addEventListener('click', async (e) => {
   const opt = e.target.closest('[data-exopt]');
-  if (opt) { exportOpts.background = !exportOpts.background; refreshExportOpts(); return; }   // toggle, keep menu open
+  if (opt) {                                                                    // toggle option, keep menu open
+    if (opt.dataset.exopt === 'bg') exportOpts.background = !exportOpts.background;
+    else if (opt.dataset.exopt === 'sel') exportOpts.selectionOnly = !exportOpts.selectionOnly;
+    refreshExportOpts(); return;
+  }
   const b = e.target.closest('[data-export]'); if (!b) return;
   const kind = b.dataset.export;
   $('#export-menu').hidden = true;
   if (!Object.keys(editor.state.nodes).length) { toast('図が空です', 'err'); return; }
-  const o = { background: exportOpts.background };
+  if (exportOpts.selectionOnly && !editor.selNodes.size) { toast('ノードを選択してください（選択範囲のみが有効）', 'err'); return; }
+  const only = (exportOpts.selectionOnly && editor.selNodes.size) ? editor.selNodes : null;
+  const o = { background: exportOpts.background, only };
   try {
     if (kind === 'svg') { exportSVG(editor, o); toast('SVG を書き出しました', 'ok'); }
     else if (kind === 'png') { await exportPNG(editor, 2, o); toast('PNG (2x) を書き出しました', 'ok'); }
     else if (kind === 'png4') { await exportPNG(editor, 4, o); toast('PNG (4x) を書き出しました', 'ok'); }
-    else if (kind === 'pdf') { await exportPDF(editor, 2); toast('PDF を書き出しました（背景あり）', 'ok'); }
+    else if (kind === 'pdf') { await exportPDF(editor, 2, o); toast('PDF を書き出しました（背景あり）', 'ok'); }
     else if (kind === 'clipboard') { await copyPNG(editor, 2, o); toast('PNG をクリップボードにコピー', 'ok'); }
   } catch (err) { console.error(err); toast('書き出しに失敗: ' + err.message, 'err'); }
 });
