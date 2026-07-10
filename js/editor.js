@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=15';
-import { typeInfo } from './nodes.js?v=15';
-import { BRAND_ICONS } from './brands.js?v=15';
+import { ICONS } from './icons.js?v=16';
+import { typeInfo } from './nodes.js?v=16';
+import { BRAND_ICONS } from './brands.js?v=16';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -218,20 +218,23 @@ export class Editor {
         g.appendChild(el('rect', { class: 'resize-handle', x: n.w - 6, y: n.h - 6, width: 14, height: 14, rx: 3, fill: accent, stroke: '#fff', 'stroke-width': 1.5, 'data-id': n.id }));
       }
     }
-    // waypoint handles for a selected edge
-    this.$overlay.querySelectorAll('.wp-handle, .wp-add').forEach((h) => h.remove());
+    // waypoint + endpoint handles for a selected edge
+    this.$overlay.querySelectorAll('.wp-handle, .wp-add, .ep-handle').forEach((h) => h.remove());
     if (this.sel.kind === 'edge') {
       const e = this.state.edges[this.sel.id];
       const a = e && this.state.nodes[e.from], b = e && this.state.nodes[e.to];
       if (e && a && b) {
         const { pa, pb, wp } = this._edgeGeom(e, a, b);
         const chain = [pa, ...wp, pb];
-        const r = 6 / this.view.k, ra = 4.5 / this.view.k;
+        const r = 6 / this.view.k, ra = 4.5 / this.view.k, ep = 5.5 / this.view.k;
         for (let i = 0; i < chain.length - 1; i++) {   // add-handles at segment midpoints
           const mx = (chain[i].x + chain[i + 1].x) / 2, my = (chain[i].y + chain[i + 1].y) / 2;
           this.$overlay.appendChild(el('circle', { class: 'wp-add', cx: mx, cy: my, r: ra, fill: accent, 'fill-opacity': 0.45, stroke: '#fff', 'stroke-width': 1 / this.view.k, 'data-edge': e.id, 'data-seg': i }));
         }
         wp.forEach((p, i) => this.$overlay.appendChild(el('circle', { class: 'wp-handle', cx: p.x, cy: p.y, r, fill: accent, stroke: '#fff', 'stroke-width': 1.5 / this.view.k, 'data-edge': e.id, 'data-idx': i })));
+        // endpoint handles (square) to reconnect the source/target
+        this.$overlay.appendChild(el('rect', { class: 'ep-handle', x: pa.x - ep, y: pa.y - ep, width: ep * 2, height: ep * 2, rx: 2 / this.view.k, fill: '#fff', stroke: accent, 'stroke-width': 2 / this.view.k, 'data-edge': e.id, 'data-end': 'from' }));
+        this.$overlay.appendChild(el('rect', { class: 'ep-handle', x: pb.x - ep, y: pb.y - ep, width: ep * 2, height: ep * 2, rx: 2 / this.view.k, fill: '#fff', stroke: accent, 'stroke-width': 2 / this.view.k, 'data-edge': e.id, 'data-end': 'to' }));
       }
     }
   }
@@ -496,6 +499,16 @@ export class Editor {
         svg.classList.add('panning'); capture(e.pointerId); return;
       }
       if (e.button !== 0) return;
+      // endpoint handle: reconnect the edge's source/target to another node
+      const epEl = e.target.closest('.ep-handle');
+      if (epEl) {
+        const ed = this.state.edges[epEl.dataset.edge]; if (!ed) return;
+        const fixedNode = this.state.nodes[epEl.dataset.end === 'from' ? ed.to : ed.from];
+        drag = { mode: 'ep-move', edge: ed.id, end: epEl.dataset.end, fixed: center(fixedNode) };
+        this._tempLink = el('path', { d: '', fill: 'none', stroke: (this._c && this._c.accent) || '#7c5cff', 'stroke-width': 2.4, 'stroke-dasharray': '5 5', 'marker-end': 'url(#arrow)' });
+        this.$overlay.appendChild(this._tempLink);
+        svg.classList.add('linking'); capture(e.pointerId); return;
+      }
       // waypoint handles (drag existing bend / add a bend on a segment)
       const wpEl = e.target.closest('.wp-handle');
       const wpAdd = e.target.closest('.wp-add');
@@ -597,6 +610,9 @@ export class Editor {
         ed.points[drag.idx] = { x: snap(w.x), y: snap(w.y) };
         drag.moved = true;
         this.render(); this._refreshSelectionClasses();
+      } else if (drag.mode === 'ep-move') {
+        const w = this.screenToWorld(e.clientX, e.clientY);
+        this._tempLink.setAttribute('d', curve({ x: drag.fixed.x, y: drag.fixed.y, dir: { x: 0, y: 0 } }, { x: w.x, y: w.y, dir: { x: 0, y: 0 } }));
       } else if (drag.mode === 'node') {
         const w = this.screenToWorld(e.clientX, e.clientY);
         const n = this.state.nodes[drag.id];
@@ -655,6 +671,17 @@ export class Editor {
       if (drag.mode === 'multi' && drag.moved) { this.render(); this._pushHistory(); }
       if (drag.mode === 'resize' && drag.moved) { this._pushHistory(); }
       if (drag.mode === 'wp-move' && drag.moved) { this._pushHistory(); }
+      if (drag.mode === 'ep-move') {
+        this._tempLink?.remove(); this._tempLink = null;
+        const tgt = document.elementFromPoint(e.clientX, e.clientY);
+        const tn = tgt && tgt.closest && tgt.closest('.node-g');
+        const ed = this.state.edges[drag.edge];
+        if (ed && tn) {
+          const newId = tn.dataset.id, other = drag.end === 'from' ? ed.to : ed.from;
+          if (newId !== other) { if (drag.end === 'from') ed.from = newId; else ed.to = newId; this._pushHistory(); }
+        }
+        this.render(); this._refreshSelectionClasses();
+      }
       if (drag.mode === 'marquee') {
         const mx = +this._marquee.getAttribute('x'), my = +this._marquee.getAttribute('y');
         const mw = +this._marquee.getAttribute('width'), mh = +this._marquee.getAttribute('height');

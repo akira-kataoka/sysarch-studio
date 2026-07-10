@@ -246,6 +246,7 @@ body {
 .resize-handle { cursor: nwse-resize; }
 .wp-handle { cursor: grab; }
 .wp-add { cursor: copy; }
+.ep-handle { cursor: crosshair; }
 .pal-item .pi-label { font-size: 10.5px; font-weight: 500; color: var(--text-dim); text-align: center; line-height: 1.2; }
 
 .palette-hint {
