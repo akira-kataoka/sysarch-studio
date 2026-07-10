@@ -241,6 +241,8 @@ body {
 .pal-item .pi-logo { font-size: 12px; font-weight: 700; letter-spacing: 0.3px; }
 .grp-head { cursor: grab; }
 .resize-handle { cursor: nwse-resize; }
+.wp-handle { cursor: grab; }
+.wp-add { cursor: copy; }
 .pal-item .pi-label { font-size: 10.5px; font-weight: 500; color: var(--text-dim); text-align: center; line-height: 1.2; }
 
 .palette-hint {

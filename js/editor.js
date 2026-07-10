@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=13';
-import { typeInfo } from './nodes.js?v=13';
-import { BRAND_ICONS } from './brands.js?v=13';
+import { ICONS } from './icons.js?v=14';
+import { typeInfo } from './nodes.js?v=14';
+import { BRAND_ICONS } from './brands.js?v=14';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -108,7 +108,7 @@ export class Editor {
     for (const e of Object.values(this.state.edges))
       if (e.from === from && e.to === to) return e;
     const id = this._id('e');
-    const edge = { id, from, to, label: opts.label ?? '', style: opts.style ?? 'solid', dir: opts.dir ?? 'forward', route: opts.route ?? 'curved', color: opts.color ?? '' };
+    const edge = { id, from, to, label: opts.label ?? '', style: opts.style ?? 'solid', dir: opts.dir ?? 'forward', route: opts.route ?? 'curved', color: opts.color ?? '', points: opts.points ?? [] };
     this.state.edges[id] = edge;
     this._pushHistory();
     this.render();
@@ -216,6 +216,22 @@ export class Editor {
       g.insertBefore(ring, g.firstChild);
       if (this.selNodes.size === 1 && ['card', 'plain', 'banner', 'group', 'band'].includes(n.shape || 'card')) {
         g.appendChild(el('rect', { class: 'resize-handle', x: n.w - 6, y: n.h - 6, width: 14, height: 14, rx: 3, fill: accent, stroke: '#fff', 'stroke-width': 1.5, 'data-id': n.id }));
+      }
+    }
+    // waypoint handles for a selected edge
+    this.$overlay.querySelectorAll('.wp-handle, .wp-add').forEach((h) => h.remove());
+    if (this.sel.kind === 'edge') {
+      const e = this.state.edges[this.sel.id];
+      const a = e && this.state.nodes[e.from], b = e && this.state.nodes[e.to];
+      if (e && a && b) {
+        const { pa, pb, wp } = this._edgeGeom(e, a, b);
+        const chain = [pa, ...wp, pb];
+        const r = 6 / this.view.k, ra = 4.5 / this.view.k;
+        for (let i = 0; i < chain.length - 1; i++) {   // add-handles at segment midpoints
+          const mx = (chain[i].x + chain[i + 1].x) / 2, my = (chain[i].y + chain[i + 1].y) / 2;
+          this.$overlay.appendChild(el('circle', { class: 'wp-add', cx: mx, cy: my, r: ra, fill: accent, 'fill-opacity': 0.45, stroke: '#fff', 'stroke-width': 1 / this.view.k, 'data-edge': e.id, 'data-seg': i }));
+        }
+        wp.forEach((p, i) => this.$overlay.appendChild(el('circle', { class: 'wp-handle', cx: p.x, cy: p.y, r, fill: accent, stroke: '#fff', 'stroke-width': 1.5 / this.view.k, 'data-edge': e.id, 'data-idx': i })));
       }
     }
   }
@@ -408,10 +424,14 @@ export class Editor {
   }
 
   _edgeGeom(e, a, b) {
+    const wp = e.points || [];
     const ca = center(a), cb = center(b);
-    const pa = anchor(a, cb.x, cb.y), pb = anchor(b, ca.x, ca.y);
-    const d = e.route === 'orthogonal' ? orthPath(pa, pb) : curve(pa, pb);
-    return { d, pa, pb };
+    const ft = wp.length ? wp[0] : cb, lt = wp.length ? wp[wp.length - 1] : ca;
+    const pa = anchor(a, ft.x, ft.y), pb = anchor(b, lt.x, lt.y);
+    let d;
+    if (wp.length) d = roundedPath([[pa.x, pa.y], ...wp.map((p) => [p.x, p.y]), [pb.x, pb.y]], 10);
+    else d = e.route === 'orthogonal' ? orthPath(pa, pb) : curve(pa, pb);
+    return { d, pa, pb, wp };
   }
 
   _edgeEl(e, a, b) {
@@ -476,6 +496,22 @@ export class Editor {
         svg.classList.add('panning'); capture(e.pointerId); return;
       }
       if (e.button !== 0) return;
+      // waypoint handles (drag existing bend / add a bend on a segment)
+      const wpEl = e.target.closest('.wp-handle');
+      const wpAdd = e.target.closest('.wp-add');
+      if (wpEl) {
+        drag = { mode: 'wp-move', edge: wpEl.dataset.edge, idx: +wpEl.dataset.idx, moved: false };
+        capture(e.pointerId); return;
+      }
+      if (wpAdd) {
+        const ed = this.state.edges[wpAdd.dataset.edge]; if (!ed) return;
+        const w = this.screenToWorld(e.clientX, e.clientY);
+        const seg = +wpAdd.dataset.seg;
+        ed.points = ed.points || []; ed.points.splice(seg, 0, { x: snap(w.x), y: snap(w.y) });
+        this.render(); this._refreshSelectionClasses();
+        drag = { mode: 'wp-move', edge: ed.id, idx: seg, moved: true };
+        capture(e.pointerId); return;
+      }
       const handleEl = e.target.closest('.resize-handle');
       const portEl = e.target.closest('.port');
       const nodeEl = e.target.closest('.node-g');
@@ -555,6 +591,12 @@ export class Editor {
         this.view.tx = drag.tx + (e.clientX - drag.sx);
         this.view.ty = drag.ty + (e.clientY - drag.sy);
         this._applyView();
+      } else if (drag.mode === 'wp-move') {
+        const ed = this.state.edges[drag.edge]; if (!ed || !ed.points[drag.idx]) return;
+        const w = this.screenToWorld(e.clientX, e.clientY);
+        ed.points[drag.idx] = { x: snap(w.x), y: snap(w.y) };
+        drag.moved = true;
+        this.render(); this._refreshSelectionClasses();
       } else if (drag.mode === 'node') {
         const w = this.screenToWorld(e.clientX, e.clientY);
         const n = this.state.nodes[drag.id];
@@ -612,6 +654,7 @@ export class Editor {
       if (drag.mode === 'node' && drag.moved) { this.render(); this._pushHistory(); }
       if (drag.mode === 'multi' && drag.moved) { this.render(); this._pushHistory(); }
       if (drag.mode === 'resize' && drag.moved) { this._pushHistory(); }
+      if (drag.mode === 'wp-move' && drag.moved) { this._pushHistory(); }
       if (drag.mode === 'marquee') {
         const mx = +this._marquee.getAttribute('x'), my = +this._marquee.getAttribute('y');
         const mw = +this._marquee.getAttribute('width'), mh = +this._marquee.getAttribute('height');
@@ -639,8 +682,10 @@ export class Editor {
     svg.addEventListener('pointerup', end);
     svg.addEventListener('pointercancel', end);
 
-    // double click a node → edit label event
+    // double click a node → edit label event; double click a waypoint → remove it
     svg.addEventListener('dblclick', (e) => {
+      const wpEl = e.target.closest('.wp-handle');
+      if (wpEl) { const ed = this.state.edges[wpEl.dataset.edge]; if (ed && ed.points) { ed.points.splice(+wpEl.dataset.idx, 1); this._pushHistory(); this.render(); this._refreshSelectionClasses(); } return; }
       const nodeEl = e.target.closest('.node-g');
       if (nodeEl) { this.select('node', nodeEl.dataset.id); this.emit('editlabel', nodeEl.dataset.id); }
     });
