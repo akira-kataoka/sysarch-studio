@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=23';
-import { typeInfo } from './nodes.js?v=23';
-import { BRAND_ICONS } from './brands.js?v=23';
+import { ICONS } from './icons.js?v=24';
+import { typeInfo } from './nodes.js?v=24';
+import { BRAND_ICONS } from './brands.js?v=24';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -279,9 +279,21 @@ export class Editor {
       const n = this.state.nodes[id];
       if (n) this.$nodes.appendChild(this._nodeEl(n));
     }
+    this._fitTexts();
     this._refreshSelectionClasses();
     this.emit('change');
     this._autosave();
+  }
+
+  // condense any label that would overflow its node (measured in-DOM, keeps full text)
+  _fitTexts() {
+    this.$nodes.querySelectorAll('text[data-maxw]').forEach((t) => {
+      const maxw = +t.dataset.maxw;
+      t.removeAttribute('textLength'); t.removeAttribute('lengthAdjust');
+      if (!(maxw > 12)) return;
+      let len = 0; try { len = t.getComputedTextLength(); } catch {}
+      if (len > maxw) { t.setAttribute('textLength', maxw); t.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
+    });
   }
 
   _nodeEl(n) {
@@ -304,7 +316,7 @@ export class Editor {
       g.appendChild(el('rect', { width: n.w, height: n.h, rx: 14, fill: mix(n.color, 6), stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.8, 'pointer-events': 'none' }));
       g.appendChild(el('rect', { class: 'grp-head', width: n.w, height: 32, rx: 14, fill: mix(n.color, 20) }));
       g.appendChild(el('rect', { class: 'grp-head', y: 16, width: n.w, height: 16, fill: mix(n.color, 20) }));
-      g.appendChild(text(14, 21, n.label, 'node-title', n.color));
+      g.appendChild(text(14, 21, n.label, 'node-title', n.color)).setAttribute('data-maxw', n.w - (n.sub ? 110 : 26));
       if (n.sub) g.appendChild(text(n.w - 12, 21, n.sub, 'node-sub', C.nodeSub)).setAttribute('text-anchor', 'end');
       return g; // no ports; drag by header
     }
@@ -312,15 +324,15 @@ export class Editor {
     // ---- title banner: solid accent bar with white text ----
     if (shape === 'banner') {
       g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 10, fill: n.color, filter: 'url(#node-shadow)' }));
-      g.appendChild(text(16, n.h / 2 + 5, n.label, 'node-title', '#ffffff'));
+      g.appendChild(text(16, n.h / 2 + 5, n.label, 'node-title', '#ffffff')).setAttribute('data-maxw', n.w - 32);
       return this._withPorts(g, n);
     }
 
     // ---- plain process box: centered label, no icon badge ----
     if (shape === 'plain') {
       g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 9, fill: C.nodeBg, stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.7, filter: 'url(#node-shadow)' }));
-      const c1 = text(n.w / 2, n.sub ? n.h / 2 - 3 : n.h / 2 + 5, n.label, 'node-title', C.nodeText); c1.setAttribute('text-anchor', 'middle'); g.appendChild(c1);
-      if (n.sub) { const c2 = text(n.w / 2, n.h / 2 + 15, n.sub, 'node-sub', C.nodeSub); c2.setAttribute('text-anchor', 'middle'); g.appendChild(c2); }
+      const c1 = text(n.w / 2, n.sub ? n.h / 2 - 3 : n.h / 2 + 5, n.label, 'node-title', C.nodeText); c1.setAttribute('text-anchor', 'middle'); c1.setAttribute('data-maxw', n.w - 16); g.appendChild(c1);
+      if (n.sub) { const c2 = text(n.w / 2, n.h / 2 + 15, n.sub, 'node-sub', C.nodeSub); c2.setAttribute('text-anchor', 'middle'); c2.setAttribute('data-maxw', n.w - 16); g.appendChild(c2); }
       return this._withPorts(g, n);
     }
 
@@ -407,12 +419,12 @@ export class Editor {
       ic.innerHTML = ICONS[info.icon] || ICONS.box;
       g.appendChild(ic);
     }
-    const tx = 62;
+    const tx = 62, mw = n.w - tx - 12;
     if (n.sub) {
-      g.appendChild(text(tx, n.h / 2 - 3, n.label, 'node-title', C.nodeText));
-      g.appendChild(text(tx, n.h / 2 + 15, n.sub, 'node-sub', C.nodeSub));
+      g.appendChild(text(tx, n.h / 2 - 3, n.label, 'node-title', C.nodeText)).setAttribute('data-maxw', mw);
+      g.appendChild(text(tx, n.h / 2 + 15, n.sub, 'node-sub', C.nodeSub)).setAttribute('data-maxw', mw);
     } else {
-      g.appendChild(text(tx, n.h / 2 + 5, n.label, 'node-title', C.nodeText));
+      g.appendChild(text(tx, n.h / 2 + 5, n.label, 'node-title', C.nodeText)).setAttribute('data-maxw', mw);
     }
     return this._withPorts(g, n);
   }

@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=23';
-import { Editor } from './editor.js?v=23';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=23';
-import { iconSvg } from './icons.js?v=23';
-import { BRAND_ICONS } from './brands.js?v=23';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=23';
+import { initBackground } from './background.js?v=24';
+import { Editor } from './editor.js?v=24';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=24';
+import { iconSvg } from './icons.js?v=24';
+import { BRAND_ICONS } from './brands.js?v=24';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=24';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
