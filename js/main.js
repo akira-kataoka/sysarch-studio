@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=20';
-import { Editor } from './editor.js?v=20';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=20';
-import { iconSvg } from './icons.js?v=20';
-import { BRAND_ICONS } from './brands.js?v=20';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=20';
+import { initBackground } from './background.js?v=21';
+import { Editor } from './editor.js?v=21';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=21';
+import { iconSvg } from './icons.js?v=21';
+import { BRAND_ICONS } from './brands.js?v=21';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=21';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -93,45 +93,27 @@ initBackground().then((b) => { bg = b; const t = THEMES.find((x) => x.id === the
 /* ---------------- palette ---------------- */
 let collapsedSet;
 try { const s = JSON.parse(localStorage.getItem('sysarch:palcollapse')); collapsedSet = new Set(Array.isArray(s) ? s : ['brand']); } catch { collapsedSet = new Set(['brand']); }
+let recent;
+try { const s = JSON.parse(localStorage.getItem('sysarch:recent')); recent = Array.isArray(s) ? s.filter((id) => TYPE_MAP[id]) : []; } catch { recent = []; }
+
+function renderPalItem(t) {
+  const icon = t.upload
+    ? `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color};font-size:18px">＋</div>`
+    : t.logo
+      ? (BRAND_ICONS[t.id]
+          ? `<div class="pi-icon pi-logo" style="background:${BRAND_ICONS[t.id].hex};border-color:${BRAND_ICONS[t.id].hex}"><svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="${BRAND_ICONS[t.id].path}"/></svg></div>`
+          : `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color}">${palInitials(t.label)}</div>`)
+      : `<div class="pi-icon">${iconSvg(t.icon, 18)}</div>`;
+  return `<div class="pal-item" draggable="true" data-type="${t.id}" style="--ncolor:${t.color}" title="${t.label}">${icon}<div class="pi-label">${t.label}</div></div>`;
+}
+
 function buildPalette() {
   const body = $('#palette-body');
   body.innerHTML = GROUPS.map((g) => `
     <div class="pal-group${collapsedSet.has(g.id) ? ' collapsed' : ''}" data-group="${g.id}">
       <div class="pal-group-title" style="--gcolor:${g.color}"><span class="pg-name">${g.title}</span><span class="pg-count">${g.types.length}</span><span class="pg-chev">▾</span></div>
-      <div class="pal-items">
-        ${g.types.map((t) => `
-          <div class="pal-item" draggable="true" data-type="${t.id}" style="--ncolor:${t.color}" title="${t.label}">
-            ${t.upload
-              ? `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color};font-size:18px">＋</div>`
-              : t.logo
-                ? (BRAND_ICONS[t.id]
-                    ? `<div class="pi-icon pi-logo" style="background:${BRAND_ICONS[t.id].hex};border-color:${BRAND_ICONS[t.id].hex}"><svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="${BRAND_ICONS[t.id].path}"/></svg></div>`
-                    : `<div class="pi-icon pi-logo" style="background:${t.color};color:#fff;border-color:${t.color}">${palInitials(t.label)}</div>`)
-                : `<div class="pi-icon">${iconSvg(t.icon, 18)}</div>`}
-            <div class="pi-label">${t.label}</div>
-          </div>`).join('')}
-      </div>
+      <div class="pal-items">${g.types.map(renderPalItem).join('')}</div>
     </div>`).join('');
-
-  body.querySelectorAll('.pal-item').forEach((item) => {
-    item.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/type', item.dataset.type);
-      e.dataTransfer.setData('text/plain', item.dataset.type);
-      e.dataTransfer.effectAllowed = 'copy';
-    });
-    // click to drop at center (upload types open an image picker first)
-    item.addEventListener('click', () => {
-      const type = item.dataset.type;
-      const r = svg.getBoundingClientRect();
-      const w = editor.screenToWorld(r.left + r.width / 2, r.top + r.height / 2);
-      if (TYPE_MAP[type].upload) {
-        pickImage((uri) => { editor.addNode(type, w.x, w.y, { img: uri, label: 'サービス' }); toast('画像を配置しました'); });
-        return;
-      }
-      editor.addNode(type, w.x, w.y);
-      toast(`「${typeInfo(type).label}」を追加`);
-    });
-  });
   // collapse / expand a group by clicking its header
   body.querySelectorAll('.pal-group-title').forEach((t) => t.addEventListener('click', () => {
     const grp = t.closest('.pal-group'); const id = grp.dataset.group;
@@ -140,11 +122,49 @@ function buildPalette() {
     try { localStorage.setItem('sysarch:palcollapse', JSON.stringify([...collapsedSet])); } catch {}
   }));
 }
+
+function renderRecent() {
+  const box = $('#pal-recent');
+  const items = recent.map((id) => TYPE_MAP[id]).filter(Boolean).slice(0, 8);
+  if (!items.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = `<div class="pal-group"><div class="pal-group-title pg-static" style="--gcolor:#4d8dff"><span class="pg-name">最近使った</span></div><div class="pal-items">${items.map(renderPalItem).join('')}</div></div>`;
+}
+
+function pushRecent(type) {
+  if (!TYPE_MAP[type]) return;
+  recent = [type, ...recent.filter((x) => x !== type)].slice(0, 8);
+  try { localStorage.setItem('sysarch:recent', JSON.stringify(recent)); } catch {}
+  renderRecent();
+}
+
+// place a part at the canvas center (upload types pick an image first)
+function placeType(type) {
+  const info = TYPE_MAP[type]; if (!info) return;
+  const r = svg.getBoundingClientRect();
+  const w = editor.screenToWorld(r.left + r.width / 2, r.top + r.height / 2);
+  if (info.upload) { pickImage((uri) => { editor.addNode(type, w.x, w.y, { img: uri, label: 'サービス' }); toast('画像を配置しました'); pushRecent(type); }); return; }
+  editor.addNode(type, w.x, w.y);
+  toast(`「${typeInfo(type).label}」を追加`);
+  pushRecent(type);
+}
+
 buildPalette();
+renderRecent();
+
+// delegated interactions (covers both group items and the recent row)
+$('#palette').addEventListener('click', (e) => { const it = e.target.closest('.pal-item'); if (it) placeType(it.dataset.type); });
+$('#palette').addEventListener('dragstart', (e) => {
+  const it = e.target.closest('.pal-item'); if (!it) return;
+  e.dataTransfer.setData('text/type', it.dataset.type);
+  e.dataTransfer.setData('text/plain', it.dataset.type);
+  e.dataTransfer.effectAllowed = 'copy';
+});
 
 $('#palette-search').addEventListener('input', (e) => {
   const q = e.target.value.trim().toLowerCase();
-  document.querySelectorAll('.pal-group').forEach((grp) => {
+  $('#pal-recent').style.display = q ? 'none' : (recent.length ? '' : 'none');
+  document.querySelectorAll('#palette-body .pal-group').forEach((grp) => {
     let visible = 0;
     grp.querySelectorAll('.pal-item').forEach((it) => {
       const hit = !q || TYPE_MAP[it.dataset.type].label.toLowerCase().includes(q) || it.dataset.type.includes(q);
@@ -164,7 +184,9 @@ svg.addEventListener('drop', (e) => {
   const type = e.dataTransfer.getData('text/type') || e.dataTransfer.getData('text/plain');
   if (!type || !TYPE_MAP[type]) return;
   const w = editor.screenToWorld(e.clientX, e.clientY);
+  if (TYPE_MAP[type].upload) { pickImage((uri) => { editor.addNode(type, w.x, w.y, { img: uri, label: 'サービス' }); pushRecent(type); }); return; }
   editor.addNode(type, w.x, w.y);
+  pushRecent(type);
 });
 
 /* ---------------- toolbar ---------------- */

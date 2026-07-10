@@ -233,6 +233,10 @@ body {
 .pg-chev { margin-left: auto; font-size: 9px; color: var(--text-faint); transition: transform .15s; }
 .pal-group.collapsed .pg-chev { transform: rotate(-90deg); }
 .pal-group.collapsed .pal-items { display: none; }
+.pal-group-title.pg-static { cursor: default; }
+.pal-group-title.pg-static:hover { background: transparent; }
+#pal-recent { padding: 0 8px; border-bottom: 1px solid var(--stroke); }
+#pal-recent .pal-items { padding-bottom: 8px; }
 .pal-items { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .pal-item {
   display: flex; flex-direction: column; align-items: center; gap: 5px;

@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=20';
-import { typeInfo } from './nodes.js?v=20';
-import { BRAND_ICONS } from './brands.js?v=20';
+import { ICONS } from './icons.js?v=21';
+import { typeInfo } from './nodes.js?v=21';
+import { BRAND_ICONS } from './brands.js?v=21';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
