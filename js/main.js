@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=26';
-import { Editor } from './editor.js?v=26';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=26';
-import { iconSvg } from './icons.js?v=26';
-import { BRAND_ICONS } from './brands.js?v=26';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=26';
+import { initBackground } from './background.js?v=27';
+import { Editor } from './editor.js?v=27';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=27';
+import { iconSvg } from './icons.js?v=27';
+import { BRAND_ICONS } from './brands.js?v=27';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=27';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -703,7 +703,7 @@ function demoMicroservices() {
   const mon = B.logo('datadog', 1060, 330, 'Datadog');
   const graf = B.logo('grafana', 1060, 410, 'Grafana');
   B.E(cli, gw, 'HTTPS'); B.E(gw, auth, '検証', 'dashed');
-  [s1, s2, s3, s4].forEach((s) => B.E(gw, s));
+  [s1, s2, s3, s4].forEach((s) => B.E(gw, s, '', 'solid', 'curved'));
   B.E(s1, d1); B.E(s2, d2); B.E(s3, d3);
   B.E(s1, mq, 'publish', 'dashed'); B.E(s2, mq, '', 'dashed'); B.E(mq, s4, 'consume', 'dashed');
   B.E(s1, cache, '', 'dotted'); B.E(s2, cache, '', 'dotted'); B.E(s1, mon, 'metrics', 'dotted');
@@ -918,8 +918,8 @@ function demoSaaSIntegration() {
   B.zone(1000, 450, 320, 200, 'カスタマーサポート', '#4dd0e1');
   const zd = B.logo('zendesk', 1016, 484, 'Zendesk');
   const ic = B.logo('intercom', 1016, 558, 'Intercom');
-  [sf, hs, st, sq, gh, li, zd, ic].forEach((s) => B.E(s, hub, '', 'dashed'));
-  B.E(hub, bus, 'publish', 'dashed');
+  [sf, hs, st, sq, gh, li, zd, ic].forEach((s) => B.E(s, hub, '', 'dashed', 'curved'));
+  B.E(hub, bus, 'publish', 'dashed', 'curved');
   return B.finish();
 }
 
