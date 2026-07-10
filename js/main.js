@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=24';
-import { Editor } from './editor.js?v=24';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=24';
-import { iconSvg } from './icons.js?v=24';
-import { BRAND_ICONS } from './brands.js?v=24';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=24';
+import { initBackground } from './background.js?v=25';
+import { Editor } from './editor.js?v=25';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=25';
+import { iconSvg } from './icons.js?v=25';
+import { BRAND_ICONS } from './brands.js?v=25';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=25';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -240,8 +240,8 @@ const helpOverlay = $('#help-overlay');
 function openHelp() { helpOverlay.hidden = false; }
 function closeHelp() { helpOverlay.hidden = true; }
 helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay || e.target.closest('[data-act="help-close"]')) closeHelp(); });
-// show the guide once on first visit
-if (!localStorage.getItem('sysarch:seenhelp')) { try { localStorage.setItem('sysarch:seenhelp', '1'); } catch {} setTimeout(openHelp, 800); }
+// gentle first-visit hint (do NOT auto-open the full-screen modal — it blocks the toolbar)
+if (!localStorage.getItem('sysarch:seenhelp')) { try { localStorage.setItem('sysarch:seenhelp', '1'); } catch {} setTimeout(() => toast('操作ガイドは右上の「?」から'), 1400); }
 function closeMenus() { ['#export-menu', '#theme-menu', '#samples-menu', '#more-menu'].forEach((s) => { const m = $(s); if (m) m.hidden = true; }); }
 
 const PAD_PRESETS = [{ v: 0, l: 'なし' }, { v: 24, l: '小' }, { v: 48, l: '標準' }, { v: 96, l: '大' }];
@@ -880,21 +880,43 @@ function demoIntegration() {
   return { version: 1, state };
 }
 
-/* ---------------- mobile drawers ---------------- */
+/* ---------------- mobile bottom sheets ---------------- */
 const backdrop = $('#drawer-backdrop');
+const isMobile = () => matchMedia('(max-width: 1024px)').matches;
 function openDrawer(which) {
   $('#palette').classList.toggle('open', which === 'palette');
   $('#inspector').classList.toggle('open', which === 'inspector');
   backdrop.classList.toggle('show', !!which);
+  document.body.classList.toggle('sheet-open', !!which);
 }
 const closeDrawers = () => openDrawer(null);
 $('#fab-parts').addEventListener('click', () => openDrawer($('#palette').classList.contains('open') ? null : 'palette'));
 $('#fab-insp').addEventListener('click', () => openDrawer($('#inspector').classList.contains('open') ? null : 'inspector'));
 backdrop.addEventListener('click', closeDrawers);
-// placing a part from the drawer closes it so the canvas is visible
+// placing a part from the palette sheet closes it so the canvas is visible
 $('#palette-body').addEventListener('click', (e) => { if (e.target.closest('.pal-item')) setTimeout(closeDrawers, 80); });
-// pulse the edit FAB when a node/edge is selected
-editor.on('select', (sel) => $('#fab-insp').classList.toggle('has-sel', !!(sel && sel.kind)));
+// on mobile: selecting a node/edge opens the inspector sheet (canvas stays visible above); deselect closes it
+editor.on('select', (sel) => {
+  const has = !!(sel && sel.kind);
+  $('#fab-insp').classList.toggle('has-sel', has);
+  if (!isMobile()) return;
+  if (has) { if (!$('#inspector').classList.contains('open')) openDrawer('inspector'); }
+  else if ($('#inspector').classList.contains('open')) closeDrawers();
+});
+
+// swipe the grab-handle area down to close a sheet
+function addSheetSwipe(el) {
+  let sy = null, active = false;
+  el.addEventListener('pointerdown', (e) => {
+    if (!isMobile()) return;
+    if (e.clientY - el.getBoundingClientRect().top > 42) return;   // only the handle zone
+    sy = e.clientY; active = true; el.style.transition = 'none';
+  });
+  el.addEventListener('pointermove', (e) => { if (active) el.style.transform = `translateY(${Math.max(0, e.clientY - sy)}px)`; });
+  const end = (e) => { if (!active) return; active = false; el.style.transition = ''; const dy = Math.max(0, e.clientY - sy); el.style.transform = ''; if (dy > 70) closeDrawers(); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+addSheetSwipe($('#palette')); addSheetSwipe($('#inspector'));
 
 /* ---------------- context menu (right-click / long-press) ---------------- */
 const ctxMenu = $('#context-menu');
