@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=17';
-import { Editor } from './editor.js?v=17';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=17';
-import { iconSvg } from './icons.js?v=17';
-import { BRAND_ICONS } from './brands.js?v=17';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=17';
+import { initBackground } from './background.js?v=18';
+import { Editor } from './editor.js?v=18';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=18';
+import { iconSvg } from './icons.js?v=18';
+import { BRAND_ICONS } from './brands.js?v=18';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=18';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -186,8 +186,17 @@ document.querySelector('.topbar-actions').addEventListener('click', (e) => {
     case 'save': saveFile(); closeMenus(); break;
     case 'load': $('#file-input').click(); closeMenus(); break;
     case 'export': toggleExportMenu(); break;
+    case 'help': openHelp(); break;
   }
 });
+
+/* ---------------- help overlay ---------------- */
+const helpOverlay = $('#help-overlay');
+function openHelp() { helpOverlay.hidden = false; }
+function closeHelp() { helpOverlay.hidden = true; }
+helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay || e.target.closest('[data-act="help-close"]')) closeHelp(); });
+// show the guide once on first visit
+if (!localStorage.getItem('sysarch:seenhelp')) { try { localStorage.setItem('sysarch:seenhelp', '1'); } catch {} setTimeout(openHelp, 800); }
 function closeMenus() { ['#export-menu', '#theme-menu', '#samples-menu', '#more-menu'].forEach((s) => { const m = $(s); if (m) m.hidden = true; }); }
 
 const exportOpts = { background: true };
@@ -445,8 +454,9 @@ addEventListener('keydown', (e) => {
   if (meta && e.key.toLowerCase() === 'c') { const n = editor.selected(); if (editor.sel.kind === 'node' && n) { e.preventDefault(); clip = { type: n.type, label: n.label, sub: n.sub, color: n.color }; pasteN = 0; toast('コピーしました'); } return; }
   if (meta && e.key.toLowerCase() === 'v') { if (clip) { e.preventDefault(); const r = svg.getBoundingClientRect(); const w = editor.screenToWorld(r.left + r.width / 2, r.top + r.height / 2); const o = (++pasteN) * 18; editor.addNode(clip.type, w.x + o, w.y + o, { label: clip.label, sub: clip.sub, color: clip.color }); } return; }
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); editor.deleteSelected(); return; }
+  if (e.key === '?') { openHelp(); return; }
   if (e.key === 'f' || e.key === 'F') { editor.fitView(); return; }
-  if (e.key === 'Escape') { editor.select(null, null); return; }
+  if (e.key === 'Escape') { if (!helpOverlay.hidden) { closeHelp(); return; } editor.select(null, null); return; }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
     if (editor.sel.kind === 'node') {
       e.preventDefault();
