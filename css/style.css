@@ -380,6 +380,25 @@ kbd {
 .help-keys { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--stroke); font-size: 11.5px; color: var(--text-dim); }
 @media (max-width: 620px) { .help-grid { grid-template-columns: 1fr; } }
 
+/* ===== diagram-as-code modal ===== */
+.code-card { width: min(720px, 96vw); }
+.code-sub { font-size: 11px; color: var(--text-faint); font-weight: 500; letter-spacing: .4px; }
+.code-area {
+  width: 100%; min-height: 320px; max-height: 52vh; resize: vertical; box-sizing: border-box;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; line-height: 1.55;
+  color: var(--text); background: var(--panel-solid);
+  border: 1px solid var(--stroke-strong); border-radius: 10px; padding: 12px 14px;
+  tab-size: 2; white-space: pre; overflow: auto;
+}
+.code-area:focus { outline: none; border-color: var(--accent); }
+.code-hint { margin-top: 10px; font-size: 11.5px; line-height: 1.85; color: var(--text-faint); }
+.code-hint b { color: var(--text-dim); font-weight: 600; }
+.code-hint code { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 1px 5px; border-radius: 5px; background: var(--accent-soft); color: var(--text-dim); }
+.code-foot { display: flex !important; align-items: center; gap: 8px; flex-wrap: wrap; }
+.code-foot .foot-spacer { flex: 1; }
+.code-foot .primary-btn, .code-foot .text-btn { width: auto; height: 34px; }
+@media (max-width: 620px) { .code-area { min-height: 240px; } .code-foot { gap: 6px; } .code-foot .foot-spacer { display: none; } }
+
 /* ===== toast ===== */
 .toast {
   position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px);

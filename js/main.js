@@ -1,10 +1,11 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=30';
-import { Editor } from './editor.js?v=30';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=30';
-import { iconSvg } from './icons.js?v=30';
-import { BRAND_ICONS } from './brands.js?v=30';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=30';
+import { initBackground } from './background.js?v=31';
+import { Editor } from './editor.js?v=31';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=31';
+import { iconSvg } from './icons.js?v=31';
+import { BRAND_ICONS } from './brands.js?v=31';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=31';
+import { parseDSL, serializeDSL } from './dsl.js?v=31';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -232,6 +233,7 @@ document.querySelector('.topbar-actions').addEventListener('click', (e) => {
     case 'load': $('#file-input').click(); closeMenus(); break;
     case 'export': toggleMenu('export-menu'); break;
     case 'help': openHelp(); closeMenus(); break;
+    case 'code': openCode(); closeMenus(); break;
   }
 });
 
@@ -252,6 +254,54 @@ function closeHelp() { helpOverlay.hidden = true; }
 helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay || e.target.closest('[data-act="help-close"]')) closeHelp(); });
 // gentle first-visit hint (do NOT auto-open the full-screen modal — it blocks the toolbar)
 if (!localStorage.getItem('sysarch:seenhelp')) { try { localStorage.setItem('sysarch:seenhelp', '1'); } catch {} setTimeout(() => toast('操作ガイドは右上の「?」から'), 1400); }
+
+/* ---------------- diagram-as-code ---------------- */
+const CODE_SAMPLE = `title 受発注システム連携図
+zone 営業部門 {
+  crm: salesforce [CRM] | 商談 / 見積
+  portal: web [受注ポータル]
+}
+zone 基幹 / バックオフィス {
+  erp: app [基幹ERP] | 在庫 / 会計
+  db: db [受注DB] | PostgreSQL
+}
+mail: mail [通知メール]
+crm -> portal : 見積連携
+portal --> erp : 受注登録
+erp -> db
+erp ..> mail : 出荷通知
+crm <-> erp : マスタ同期`;
+const codeOverlay = $('#code-overlay');
+const codeArea = $('#code-area');
+function openCode() {
+  if (!codeArea.value.trim()) codeArea.value = serializeDSL(editor.state) || CODE_SAMPLE;
+  codeOverlay.hidden = false;
+  setTimeout(() => codeArea.focus(), 30);
+}
+function closeCode() { codeOverlay.hidden = true; }
+function codeReflect() { codeArea.value = serializeDSL(editor.state); toast('現在の図をコードに変換しました'); }
+function codeGenerate() {
+  const text = codeArea.value;
+  let res;
+  try { res = parseDSL(text, typeInfo); } catch (err) { toast('解析エラー: ' + err.message, 'err'); return; }
+  if (!res || !Object.keys(res.state.nodes).length) { toast('ノードがありません。書式を確認してください', 'err'); return; }
+  editor.loadJSON(res);
+  closeCode();
+  toast(`図を生成しました（${Object.keys(res.state.nodes).length} ノード）`, 'ok');
+}
+codeOverlay.addEventListener('click', (e) => {
+  if (e.target === codeOverlay) { closeCode(); return; }
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'code-close') closeCode();
+  else if (act === 'code-gen') codeGenerate();
+  else if (act === 'code-reflect') codeReflect();
+  else if (act === 'code-sample') { codeArea.value = CODE_SAMPLE; codeArea.focus(); }
+});
+codeArea.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); closeCode(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); codeGenerate(); }
+  e.stopPropagation();   // keep global editor shortcuts from firing while typing code
+});
 function closeMenus() {
   ['#export-menu', '#theme-menu', '#samples-menu', '#more-menu'].forEach((s) => {
     const m = $(s); if (!m) return;
@@ -533,6 +583,7 @@ function bindOps() {
 let clip = null, pasteN = 0;   // copy/paste buffer
 addEventListener('keydown', (e) => {
   if (isTyping(e)) return;
+  if (!codeOverlay.hidden) { if (e.key === 'Escape') closeCode(); return; }  // code modal open: swallow canvas shortcuts
   const meta = e.ctrlKey || e.metaKey;
   if (meta && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? editor.redo() : editor.undo(); return; }
   if (meta && e.key.toLowerCase() === 'y') { e.preventDefault(); editor.redo(); return; }
