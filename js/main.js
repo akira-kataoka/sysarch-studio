@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=25';
-import { Editor } from './editor.js?v=25';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=25';
-import { iconSvg } from './icons.js?v=25';
-import { BRAND_ICONS } from './brands.js?v=25';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=25';
+import { initBackground } from './background.js?v=26';
+import { Editor } from './editor.js?v=26';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=26';
+import { iconSvg } from './icons.js?v=26';
+import { BRAND_ICONS } from './brands.js?v=26';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=26';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -225,15 +225,25 @@ document.querySelector('.topbar-actions').addEventListener('click', (e) => {
     case 'zoom-fit': editor.fitView(); break;
     case 'grid': { const on = editor.toggleGrid(); btn.classList.toggle('is-on', on); document.querySelectorAll('[data-act="grid"]').forEach((g) => g.classList.toggle('is-on', on)); closeMenus(); break; }
     case 'layout': editor.autoLayout(); toast('自動整列しました'); closeMenus(); break;
-    case 'samples': { const m = $('#samples-menu'); m.hidden = !m.hidden; $('#theme-menu').hidden = true; $('#export-menu').hidden = true; $('#more-menu') && ($('#more-menu').hidden = true); break; }
-    case 'theme-menu': { const m = $('#theme-menu'); m.hidden = !m.hidden; $('#export-menu').hidden = true; $('#samples-menu').hidden = true; $('#more-menu') && ($('#more-menu').hidden = true); break; }
-    case 'more': { const m = $('#more-menu'); m.hidden = !m.hidden; $('#theme-menu').hidden = true; $('#export-menu').hidden = true; $('#samples-menu').hidden = true; break; }
+    case 'samples': toggleMenu('samples-menu'); break;
+    case 'theme-menu': toggleMenu('theme-menu'); break;
+    case 'more': toggleMenu('more-menu'); break;
     case 'save': saveFile(); closeMenus(); break;
     case 'load': $('#file-input').click(); closeMenus(); break;
-    case 'export': toggleExportMenu(); break;
-    case 'help': openHelp(); break;
+    case 'export': toggleMenu('export-menu'); break;
+    case 'help': openHelp(); closeMenus(); break;
   }
 });
+
+// topbar dropdowns: on mobile they are relocated to <body> so they escape the
+// topbar's backdrop-filter containing block (which otherwise anchors position:fixed to the topbar)
+function openMenu(id) {
+  closeMenus();
+  const m = $('#' + id); if (!m) return;
+  if (matchMedia('(max-width: 1024px)').matches) { m._home = m._home || m.parentElement; document.body.appendChild(m); document.body.classList.add('topmenu-open'); }
+  m.hidden = false;
+}
+function toggleMenu(id) { const m = $('#' + id); if (!m) return; if (m.hidden) openMenu(id); else closeMenus(); }
 
 /* ---------------- help overlay ---------------- */
 const helpOverlay = $('#help-overlay');
@@ -242,7 +252,14 @@ function closeHelp() { helpOverlay.hidden = true; }
 helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay || e.target.closest('[data-act="help-close"]')) closeHelp(); });
 // gentle first-visit hint (do NOT auto-open the full-screen modal — it blocks the toolbar)
 if (!localStorage.getItem('sysarch:seenhelp')) { try { localStorage.setItem('sysarch:seenhelp', '1'); } catch {} setTimeout(() => toast('操作ガイドは右上の「?」から'), 1400); }
-function closeMenus() { ['#export-menu', '#theme-menu', '#samples-menu', '#more-menu'].forEach((s) => { const m = $(s); if (m) m.hidden = true; }); }
+function closeMenus() {
+  ['#export-menu', '#theme-menu', '#samples-menu', '#more-menu'].forEach((s) => {
+    const m = $(s); if (!m) return;
+    m.hidden = true;
+    if (m._home && m.parentElement === document.body) m._home.appendChild(m);  // return relocated menu to its topbar wrap
+  });
+  document.body.classList.remove('topmenu-open');
+}
 
 const PAD_PRESETS = [{ v: 0, l: 'なし' }, { v: 24, l: '小' }, { v: 48, l: '標準' }, { v: 96, l: '大' }];
 const exportOpts = { background: true, selectionOnly: false, pad: 48 };
@@ -263,7 +280,7 @@ $('#export-menu').addEventListener('click', async (e) => {
   }
   const b = e.target.closest('[data-export]'); if (!b) return;
   const kind = b.dataset.export;
-  $('#export-menu').hidden = true;
+  closeMenus();
   if (!Object.keys(editor.state.nodes).length) { toast('図が空です', 'err'); return; }
   if (exportOpts.selectionOnly && !editor.selNodes.size) { toast('ノードを選択してください（選択範囲のみが有効）', 'err'); return; }
   const only = (exportOpts.selectionOnly && editor.selNodes.size) ? editor.selNodes : null;
@@ -278,18 +295,15 @@ $('#export-menu').addEventListener('click', async (e) => {
   } catch (err) { console.error(err); toast('書き出しに失敗: ' + err.message, 'err'); }
 });
 
-function toggleExportMenu() {
-  const m = $('#export-menu');
-  m.hidden = !m.hidden;
-}
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.menu-wrap')) closeMenus();
+  // menus can be relocated to <body> on mobile, so also treat clicks inside a .menu as "inside"
+  if (!e.target.closest('.menu-wrap') && !e.target.closest('.menu')) closeMenus();
 });
 
 $('#samples-menu').addEventListener('click', (e) => {
   const b = e.target.closest('[data-sample]'); if (!b) return;
   closeMenus();
-  const map = { arch: demoDiagram, microservices: demoMicroservices, serverless: demoServerless, ecommerce: demoEcommerce, hybrid: demoHybrid, dataplatform: demoDataPlatform, integration: demoIntegration, hr: demoHRIntegration };
+  const map = { arch: demoDiagram, microservices: demoMicroservices, serverless: demoServerless, ecommerce: demoEcommerce, hybrid: demoHybrid, dataplatform: demoDataPlatform, kubernetes: demoKubernetes, iot: demoIoT, integration: demoIntegration, saas: demoSaaSIntegration, hr: demoHRIntegration };
   editor.loadJSON((map[b.dataset.sample] || demoDiagram)());
   toast('サンプルを読み込みました', 'ok');
 });
@@ -878,6 +892,105 @@ function demoIntegration() {
   [...back, ...front].forEach((o) => (state.nodes[o.id] = o));
   edges.forEach((x) => (state.edges[x.id] = x));
   return { version: 1, state };
+}
+
+// SaaS 統合基盤 — iPaaS ハブを中心に部門SaaSを連携（グループ枠を多用）
+function demoSaaSIntegration() {
+  const B = demoBuilder();
+  B.banner(40, 16, 440, 'SaaS 統合基盤（iPaaS ハブ連携）');
+  // 中央：統合ハブ
+  B.zone(520, 250, 320, 220, '統合基盤 iPaaS', '#43d19e');
+  const hub = B.node('gateway', 560, 296, 'iPaaS', 'データ変換 / 連携');
+  const bus = B.node('queue', 560, 388, 'イベントバス', 'Kafka');
+  // 営業（左上）
+  B.zone(40, 70, 320, 200, '営業部門', '#5b9dff');
+  const sf = B.logo('salesforce', 60, 104, 'Salesforce');
+  const hs = B.logo('hubspot', 60, 178, 'HubSpot');
+  // 経理（右上）
+  B.zone(1000, 70, 320, 200, '経理 / 財務部門', '#ffb454');
+  const st = B.logo('stripe', 1016, 104, 'Stripe');
+  const sq = B.logo('square', 1016, 178, 'Square');
+  // 人事（左下）
+  B.zone(40, 450, 320, 200, '人事部門', '#c084fc');
+  const gh = B.logo('greenhouse', 60, 484, 'Greenhouse');
+  const li = B.logo('linkedin', 60, 558, 'LinkedIn');
+  // カスタマーサポート（右下）
+  B.zone(1000, 450, 320, 200, 'カスタマーサポート', '#4dd0e1');
+  const zd = B.logo('zendesk', 1016, 484, 'Zendesk');
+  const ic = B.logo('intercom', 1016, 558, 'Intercom');
+  [sf, hs, st, sq, gh, li, zd, ic].forEach((s) => B.E(s, hub, '', 'dashed'));
+  B.E(hub, bus, 'publish', 'dashed');
+  return B.finish();
+}
+
+// Kubernetes コンテナ基盤 — クラスタzone内にnamespace band（入れ子グループ枠）
+function demoKubernetes() {
+  const B = demoBuilder();
+  B.banner(40, 16, 420, 'Kubernetes コンテナ基盤');
+  const cf = B.logo('cloudflare', 56, 190, 'Cloudflare');
+  const lb = B.node('lb', 60, 300, 'Ingress', 'NGINX / LB');
+  // クラスタ（外枠）
+  B.zone(320, 80, 720, 470, 'Kubernetes クラスタ', '#4dd0e1');
+  // namespace: frontend
+  B.band(336, 128, 690, 122, 'namespace: frontend', '#5b9dff');
+  const fe1 = B.node('service', 352, 154, 'Web UI', 'React SSR');
+  const fe2 = B.node('service', 560, 154, 'BFF', 'GraphQL');
+  const fe3 = B.node('service', 768, 154, '認証', 'OIDC');
+  // namespace: backend
+  B.band(336, 268, 690, 122, 'namespace: backend', '#7c5cff');
+  const be1 = B.node('service', 352, 294, '注文API');
+  const be2 = B.node('service', 560, 294, '在庫API');
+  const be3 = B.node('service', 768, 294, '決済API');
+  // namespace: data
+  B.band(336, 408, 690, 126, 'namespace: data', '#43d19e');
+  const d1 = B.logo('postgresql', 352, 438, 'PostgreSQL');
+  const d2 = B.logo('redis', 560, 438, 'Redis');
+  const d3 = B.logo('mongodb', 768, 438, 'MongoDB');
+  // 可観測性
+  B.zone(1080, 80, 240, 300, '可観測性', '#ffb454');
+  const m1 = B.logo('grafana', 1096, 120, 'Grafana');
+  const m2 = B.logo('datadog', 1096, 200, 'Datadog');
+  const m3 = B.logo('elasticsearch', 1096, 280, 'Elastic');
+  B.E(cf, lb, 'HTTPS'); B.E(lb, fe1); B.E(lb, fe2);
+  B.E(fe1, be1); B.E(fe2, be1); B.E(fe2, be2); B.E(fe3, be3, '', 'dashed');
+  B.E(be1, d1); B.E(be2, d2, '', 'dotted'); B.E(be3, d3);
+  B.E(be1, m2, 'metrics', 'dotted'); B.E(fe1, m1, '', 'dotted');
+  return B.finish();
+}
+
+// IoT / スマートファクトリー — エッジ→クラウド→分析（3ゾーン + band）
+function demoIoT() {
+  const B = demoBuilder();
+  B.banner(40, 16, 460, 'IoT / スマートファクトリー基盤');
+  // 工場 / エッジ
+  B.zone(40, 80, 360, 470, '工場 / エッジ', '#94a3b8');
+  B.band(56, 128, 330, 176, '現場デバイス', '#5b9dff');
+  const s1 = B.box(72, 158, '温度センサ', 140);
+  const s2 = B.box(72, 214, '振動センサ', 140);
+  const s3 = B.box(230, 158, 'PLC 制御', 140);
+  const s4 = B.box(230, 214, 'カメラ', 140);
+  const egw = B.node('gateway', 72, 340, 'エッジGW', 'データ集約 / 前処理');
+  const ebuf = B.node('cache', 72, 440, 'ローカルバッファ', 'SQLite');
+  // クラウド基盤
+  B.zone(440, 80, 470, 470, 'クラウド基盤', '#4dd0e1');
+  const core = B.node('gateway', 460, 128, 'IoT Core', 'MQTT 取込');
+  const strm = B.node('queue', 460, 228, 'ストリーム', 'Kinesis');
+  const fn = B.node('function', 680, 128, '異常検知Fn');
+  const tsdb = B.node('nosql', 680, 228, '時系列DB', 'Timestream');
+  const lake = B.node('storage', 460, 340, 'データレイク', 'S3');
+  const ml = B.logo('googlecloud', 680, 344, 'ML 予測');
+  // 分析 / 可視化
+  B.zone(950, 80, 360, 470, '分析 / 可視化', '#ffb454');
+  const es = B.logo('elasticsearch', 966, 128, 'Elastic');
+  const gr = B.logo('grafana', 966, 208, 'Grafana');
+  const tb = B.logo('tableau', 966, 288, 'Tableau');
+  const alert = B.box(966, 380, 'アラート通知', 180);
+  [s1, s2, s3, s4].forEach((s) => B.E(s, egw));
+  B.E(egw, ebuf, '', 'dotted'); B.E(egw, core, 'MQTT', 'dashed');
+  B.E(core, strm, '', 'dashed'); B.E(strm, fn, 'consume', 'dashed');
+  B.E(fn, tsdb); B.E(strm, lake); B.E(lake, ml, '', 'dotted');
+  B.E(tsdb, gr); B.E(lake, es); B.E(ml, tb); B.E(fn, alert, '異常', 'dashed');
+  return B.finish();
 }
 
 /* ---------------- mobile bottom sheets ---------------- */
