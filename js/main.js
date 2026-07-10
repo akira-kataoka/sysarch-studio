@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=14';
-import { Editor } from './editor.js?v=14';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=14';
-import { iconSvg } from './icons.js?v=14';
-import { BRAND_ICONS } from './brands.js?v=14';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=14';
+import { initBackground } from './background.js?v=15';
+import { Editor } from './editor.js?v=15';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=15';
+import { iconSvg } from './icons.js?v=15';
+import { BRAND_ICONS } from './brands.js?v=15';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=15';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -179,17 +179,24 @@ document.querySelector('.topbar-actions').addEventListener('click', (e) => {
 });
 function closeMenus() { ['#export-menu', '#theme-menu', '#samples-menu', '#more-menu'].forEach((s) => { const m = $(s); if (m) m.hidden = true; }); }
 
+const exportOpts = { background: true };
+function refreshExportOpts() { const bt = $('#exopt-bg'); if (bt) bt.classList.toggle('is-checked', exportOpts.background); }
+refreshExportOpts();
+
 $('#export-menu').addEventListener('click', async (e) => {
+  const opt = e.target.closest('[data-exopt]');
+  if (opt) { exportOpts.background = !exportOpts.background; refreshExportOpts(); return; }   // toggle, keep menu open
   const b = e.target.closest('[data-export]'); if (!b) return;
   const kind = b.dataset.export;
   $('#export-menu').hidden = true;
   if (!Object.keys(editor.state.nodes).length) { toast('図が空です', 'err'); return; }
+  const o = { background: exportOpts.background };
   try {
-    if (kind === 'svg') { exportSVG(editor); toast('SVG を書き出しました', 'ok'); }
-    else if (kind === 'png') { await exportPNG(editor, 2); toast('PNG (2x) を書き出しました', 'ok'); }
-    else if (kind === 'png4') { await exportPNG(editor, 4); toast('PNG (4x) を書き出しました', 'ok'); }
-    else if (kind === 'pdf') { await exportPDF(editor, 2); toast('PDF を書き出しました', 'ok'); }
-    else if (kind === 'clipboard') { await copyPNG(editor, 2); toast('PNG をクリップボードにコピー', 'ok'); }
+    if (kind === 'svg') { exportSVG(editor, o); toast('SVG を書き出しました', 'ok'); }
+    else if (kind === 'png') { await exportPNG(editor, 2, o); toast('PNG (2x) を書き出しました', 'ok'); }
+    else if (kind === 'png4') { await exportPNG(editor, 4, o); toast('PNG (4x) を書き出しました', 'ok'); }
+    else if (kind === 'pdf') { await exportPDF(editor, 2); toast('PDF を書き出しました（背景あり）', 'ok'); }
+    else if (kind === 'clipboard') { await copyPNG(editor, 2, o); toast('PNG をクリップボードにコピー', 'ok'); }
   } catch (err) { console.error(err); toast('書き出しに失敗: ' + err.message, 'err'); }
 });
 
@@ -204,7 +211,7 @@ document.addEventListener('click', (e) => {
 $('#samples-menu').addEventListener('click', (e) => {
   const b = e.target.closest('[data-sample]'); if (!b) return;
   closeMenus();
-  const map = { arch: demoDiagram, microservices: demoMicroservices, serverless: demoServerless, dataplatform: demoDataPlatform, integration: demoIntegration };
+  const map = { arch: demoDiagram, microservices: demoMicroservices, serverless: demoServerless, ecommerce: demoEcommerce, hybrid: demoHybrid, dataplatform: demoDataPlatform, integration: demoIntegration, hr: demoHRIntegration };
   editor.loadJSON((map[b.dataset.sample] || demoDiagram)());
   toast('サンプルを読み込みました', 'ok');
 });
@@ -307,6 +314,7 @@ function renderNodeInspector(n) {
       ${swatchRow(n.color)}
     </div>
     ${isGroup ? `<div class="insp-section"><h3>コンテナ</h3><div class="btn-row">
+        <button class="chip-btn" data-op="arrangezone">▦ 中身をグリッド整列</button>
         <button class="chip-btn" data-op="fitzone">▣ 中身に合わせる</button>
       </div></div>` : ''}
     <div class="insp-section">
@@ -409,6 +417,7 @@ function bindOps() {
     else if (b.dataset.op === 'front') editor.bringToFront();
     else if (b.dataset.op === 'back') editor.sendToBack();
     else if (b.dataset.op === 'fitzone') { editor.fitZoneToChildren(); toast('枠を中身に合わせました'); }
+    else if (b.dataset.op === 'arrangezone') { editor.arrangeZone(); toast('中身をグリッド整列しました'); }
     else if (b.dataset.op === 'compact') { const n = editor.selected(); const c = !n.compact; editor.applyPatch({ compact: c, w: c ? 76 : 170, h: c ? 82 : 56 }); editor.emit('select', editor.sel); }
   }));
 }
@@ -638,6 +647,72 @@ function demoDataPlatform() {
   const bi1 = B.logo('tableau', 856, 150, 'Tableau'); const bi2 = B.logo('looker', 856, 260, 'Looker');
   [s1, s2, s3, s4].forEach((s) => B.E(s, ing));
   B.E(ing, q, '', 'dashed'); B.E(q, lake, '', 'dashed'); B.E(ing, lake); B.E(lake, wh, 'ロード'); B.E(wh, bi1); B.E(wh, bi2);
+  return B.finish();
+}
+
+// e-commerce site architecture
+function demoEcommerce() {
+  const B = demoBuilder();
+  B.banner(40, 20, 340, 'ECサイト システム構成');
+  const cli = B.node('browser', 60, 190, '買い物客', 'Web / アプリ');
+  const cdn = B.logo('cloudflare', 300, 130, 'CDN');
+  const lb = B.node('lb', 300, 240, 'ロードバランサ');
+  B.zone(560, 90, 460, 420, 'アプリケーション', '#7c5cff');
+  const web = B.node('web', 580, 130, 'Webフロント', 'Next.js');
+  const cart = B.node('service', 580, 230, 'カートサービス');
+  const order = B.node('service', 580, 330, '注文サービス');
+  const cat = B.node('service', 790, 130, 'カタログ');
+  const pay = B.node('service', 790, 230, '決済サービス');
+  const search = B.node('nosql', 790, 330, '検索', 'Elasticsearch');
+  const db = B.node('db', 1060, 120, '商品DB', 'PostgreSQL');
+  const cache = B.node('cache', 1060, 220, 'キャッシュ', 'Redis');
+  const stripe = B.logo('stripe', 1060, 320, 'Stripe');
+  const q = B.node('queue', 1060, 410, 'キュー', 'SQS');
+  B.E(cli, cdn); B.E(cdn, lb, 'assets'); B.E(cli, lb, 'HTTPS');
+  B.E(lb, web); B.E(web, cart); B.E(web, cat); B.E(cart, order); B.E(order, pay);
+  B.E(pay, stripe, '決済', 'dashed'); B.E(cat, search); B.E(cat, db); B.E(order, db);
+  B.E(cart, cache, '', 'dotted'); B.E(order, q, '通知', 'dashed');
+  return B.finish();
+}
+
+// hybrid on-prem + cloud architecture
+function demoHybrid() {
+  const B = demoBuilder();
+  B.banner(40, 20, 420, 'ハイブリッド構成（オンプレ ＋ クラウド）');
+  B.zone(40, 110, 340, 380, 'オンプレミス', '#94a3b8');
+  const legacy = B.node('app', 60, 150, '基幹システム', 'Oracle');
+  const odb = B.node('db', 60, 250, '基幹DB', 'Oracle');
+  const batch = B.node('batch', 60, 350, '夜間バッチ');
+  const vpn = B.node('firewall', 410, 260, 'VPN / 専用線');
+  B.zone(620, 110, 460, 380, 'クラウド', '#4dd0e1');
+  const gw = B.node('gateway', 640, 150, 'API Gateway');
+  const svc = B.node('service', 640, 250, '連携サービス');
+  const dwh = B.logo('snowflake', 850, 150, 'DWH');
+  const bi = B.logo('tableau', 850, 250, 'BI');
+  const store = B.node('storage', 850, 360, 'ストレージ', 'S3');
+  B.E(legacy, odb); B.E(batch, odb); B.E(legacy, vpn, '連携', 'dashed');
+  B.E(vpn, svc, '', 'dashed'); B.E(svc, gw); B.E(odb, dwh, '日次連携', 'dotted');
+  B.E(dwh, bi); B.E(svc, store);
+  return B.finish();
+}
+
+// recruiting / HR integration diagram
+function demoHRIntegration() {
+  const B = demoBuilder();
+  B.banner(40, 20, 340, '採用・人事 システム連携図');
+  B.zone(40, 100, 300, 330, '採用領域', '#5b9dff');
+  const m1 = B.logo('indeed', 56, 132, 'Indeed'); const m2 = B.logo('linkedin', 56, 200, 'LinkedIn'); const m3 = B.logo('wantedly', 56, 268, 'Wantedly');
+  const apl = B.box(236, 150, '応募者'); const scr = B.box(236, 212, '選考');
+  B.zone(370, 100, 300, 330, '人事 / ATS', '#7c5cff');
+  const ats = B.logo('notion', 386, 132, 'ATS');
+  const offer = B.box(556, 150, '内定'); const onb = B.box(556, 212, '入社手続'); const emp = B.box(556, 274, '従業員');
+  B.zone(700, 100, 300, 330, '労務 / 情報共有', '#43d19e');
+  const slack = B.logo('slack', 716, 132, 'Slack'); const cal = B.logo('googlecalendar', 716, 200, 'Calendar');
+  const kintai = B.box(896, 150, '勤怠'); const kyuyo = B.box(896, 212, '給与'); const hoken = B.box(896, 274, '社会保険');
+  [m1, m2, m3].forEach((m) => B.E(m, apl));
+  B.E(apl, scr); B.E(scr, ats, '登録', 'dashed'); B.E(ats, offer); B.E(offer, onb); B.E(onb, emp);
+  B.E(emp, kintai); B.E(kintai, kyuyo); B.E(kyuyo, hoken);
+  B.E(onb, slack, '通知', 'dotted');
   return B.finish();
 }
 

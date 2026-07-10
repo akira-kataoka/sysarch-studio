@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=14';
-import { typeInfo } from './nodes.js?v=14';
-import { BRAND_ICONS } from './brands.js?v=14';
+import { ICONS } from './icons.js?v=15';
+import { typeInfo } from './nodes.js?v=15';
+import { BRAND_ICONS } from './brands.js?v=15';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -798,6 +798,23 @@ export class Editor {
     kids.forEach((m) => { minx = Math.min(minx, m.x); miny = Math.min(miny, m.y); maxx = Math.max(maxx, m.x + m.w); maxy = Math.max(maxy, m.y + m.h); });
     z.x = snap(minx - 16); z.y = snap(miny - 44); z.w = snap(maxx - minx + 32); z.h = snap(maxy - miny + 60);
     this._pushHistory(); this.render();
+  }
+
+  // grid-arrange the nodes inside a zone, then fit the zone to them
+  arrangeZone(id = this.sel.id) {
+    const z = this.state.nodes[id]; if (!z || z.shape !== 'group') return;
+    const kids = Object.values(this.state.nodes).filter((m) => m.id !== id && m.shape !== 'group' && inside(z, m));
+    if (!kids.length) return;
+    kids.sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    const padX = 16, padTop = 42, gapX = 20, gapY = 16;
+    const maxW = Math.max(...kids.map((k) => k.w)), maxH = Math.max(...kids.map((k) => k.h));
+    const cols = Math.max(1, Math.floor((z.w - padX * 2 + gapX) / (maxW + gapX)));
+    kids.forEach((k, i) => {
+      const col = i % cols, row = Math.floor(i / cols);
+      k.x = snap(z.x + padX + col * (maxW + gapX));
+      k.y = snap(z.y + padTop + row * (maxH + gapY));
+    });
+    this.fitZoneToChildren(id);   // pushes history + renders
   }
 
   // snap the dragged node's edges/centers to other nodes; returns guide lines to draw
