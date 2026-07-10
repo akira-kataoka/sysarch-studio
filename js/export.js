@@ -14,7 +14,7 @@ const FONT_CSS =
   `text{font-family:'Inter',system-ui,-apple-system,'Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif;}` +
   `.node-title{font-weight:600;font-size:13.5px;}` +
   `.node-sub{font-weight:400;font-size:10.5px;}` +
-  `.edge-label{font-weight:500;font-size:11px;}`;
+  `.edge-label-text{font-weight:500;font-size:11px;}`;
 
 // bounding box over a set of node ids
 function bboxOf(editor, only, pad) {

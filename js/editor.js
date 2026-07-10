@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=21';
-import { typeInfo } from './nodes.js?v=21';
-import { BRAND_ICONS } from './brands.js?v=21';
+import { ICONS } from './icons.js?v=22';
+import { typeInfo } from './nodes.js?v=22';
+import { BRAND_ICONS } from './brands.js?v=22';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -437,8 +437,16 @@ export class Editor {
     return { d, pa, pb, wp };
   }
 
+  // default label anchor = midpoint of the middle path segment
+  _edgeLabelAnchor(geom) {
+    const chain = [geom.pa, ...geom.wp, geom.pb];
+    const i = Math.max(0, Math.floor((chain.length - 1) / 2));
+    return { x: (chain[i].x + chain[i + 1].x) / 2, y: (chain[i].y + chain[i + 1].y) / 2 };
+  }
+
   _edgeEl(e, a, b) {
-    const { d, pa, pb } = this._edgeGeom(e, a, b);
+    const geom = this._edgeGeom(e, a, b);
+    const { d, pa, pb, wp } = geom;
     const color = e.color || this._c.edge;
     const g = el('g', { class: 'edge-g', 'data-id': e.id, 'data-color': color, 'data-from': e.from, 'data-to': e.to });
     g.appendChild(el('path', { class: 'edge-hit', d, fill: 'none', stroke: 'transparent', 'stroke-width': 16, 'pointer-events': 'stroke' }));
@@ -453,12 +461,15 @@ export class Editor {
     });
     g.appendChild(line);
     if (e.label) {
-      const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
-      const t = text(mx, my - 6, e.label, 'edge-label', this._c.textDim);
+      const anc = this._edgeLabelAnchor(geom);
+      const mx = anc.x + (e.lx || 0), my = anc.y + (e.ly || 0);
+      const w = e.label.length * 7.2 + 12;
+      const lg = el('g', { class: 'edge-label', 'data-edge': e.id });
+      lg.appendChild(el('rect', { x: mx - w / 2, y: my - 9, width: w, height: 18, rx: 6, fill: this._c.canvas, opacity: 0.85 }));
+      const t = text(mx, my + 4, e.label, 'edge-label-text', this._c.textDim);
       t.setAttribute('text-anchor', 'middle');
-      // background pill for readability
-      const bg = el('rect', { x: mx - e.label.length * 3.6 - 6, y: my - 18, width: e.label.length * 7.2 + 12, height: 18, rx: 6, fill: this._c.canvas, opacity: 0.85 });
-      g.appendChild(bg); g.appendChild(t);
+      lg.appendChild(t);
+      g.appendChild(lg);
     }
     return g;
   }
@@ -524,6 +535,17 @@ export class Editor {
         this.render(); this._refreshSelectionClasses();
         drag = { mode: 'wp-move', edge: ed.id, idx: seg, moved: true };
         capture(e.pointerId); return;
+      }
+      // edge label: first click selects the edge, subsequent drag moves the label
+      const labelEl = e.target.closest('.edge-label');
+      if (labelEl) {
+        const eid = labelEl.dataset.edge;
+        if (this.sel.kind === 'edge' && this.sel.id === eid) {
+          const ed = this.state.edges[eid]; const na = this.state.nodes[ed.from], nb = this.state.nodes[ed.to];
+          drag = { mode: 'label-move', edge: eid, anc: this._edgeLabelAnchor(this._edgeGeom(ed, na, nb)), moved: false };
+          capture(e.pointerId); return;
+        }
+        this.select('edge', eid); return;
       }
       const handleEl = e.target.closest('.resize-handle');
       const portEl = e.target.closest('.port');
@@ -613,6 +635,12 @@ export class Editor {
       } else if (drag.mode === 'ep-move') {
         const w = this.screenToWorld(e.clientX, e.clientY);
         this._tempLink.setAttribute('d', curve({ x: drag.fixed.x, y: drag.fixed.y, dir: { x: 0, y: 0 } }, { x: w.x, y: w.y, dir: { x: 0, y: 0 } }));
+      } else if (drag.mode === 'label-move') {
+        const w = this.screenToWorld(e.clientX, e.clientY);
+        const ed = this.state.edges[drag.edge]; if (!ed) return;
+        ed.lx = snap(w.x - drag.anc.x); ed.ly = snap(w.y - drag.anc.y);
+        drag.moved = true;
+        this.render(); this._refreshSelectionClasses();
       } else if (drag.mode === 'node') {
         const w = this.screenToWorld(e.clientX, e.clientY);
         const n = this.state.nodes[drag.id];
@@ -671,6 +699,7 @@ export class Editor {
       if (drag.mode === 'multi' && drag.moved) { this.render(); this._pushHistory(); }
       if (drag.mode === 'resize' && drag.moved) { this._pushHistory(); }
       if (drag.mode === 'wp-move' && drag.moved) { this._pushHistory(); }
+      if (drag.mode === 'label-move' && drag.moved) { this._pushHistory(); }
       if (drag.mode === 'ep-move') {
         this._tempLink?.remove(); this._tempLink = null;
         const tgt = document.elementFromPoint(e.clientX, e.clientY);

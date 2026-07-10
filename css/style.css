@@ -283,7 +283,8 @@ body {
 .node-g:active { cursor: grabbing; }
 .node-title { font: 600 13.5px "Inter", sans-serif; }
 .node-sub { font: 400 10.5px "Inter", sans-serif; }
-.edge-label { font: 500 11px "Inter", sans-serif; }
+.edge-label-text { font: 500 11px "Inter", sans-serif; }
+.edge-g.is-selected .edge-label { cursor: move; }
 #grid-dots circle { fill: var(--grid-dot); }
 .port { fill: var(--accent); stroke: #fff; stroke-width: 1.5; cursor: crosshair; }
 :root[data-theme="light"] .port { stroke: #fff; }
@@ -357,6 +358,7 @@ kbd {
 
 /* ===== help modal ===== */
 .modal-overlay { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; padding: 20px; background: rgba(0,0,0,0.5); backdrop-filter: blur(3px); touch-action: manipulation; }
+.modal-overlay[hidden] { display: none; }   /* [hidden] must beat the display:grid above */
 .modal-card { width: min(760px, 96vw); max-height: 86vh; display: flex; flex-direction: column; border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 12px 18px; border-bottom: 1px solid var(--stroke); }
 .modal-head strong { font-size: 14px; }

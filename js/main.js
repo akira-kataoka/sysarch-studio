@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=21';
-import { Editor } from './editor.js?v=21';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=21';
-import { iconSvg } from './icons.js?v=21';
-import { BRAND_ICONS } from './brands.js?v=21';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=21';
+import { initBackground } from './background.js?v=22';
+import { Editor } from './editor.js?v=22';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=22';
+import { iconSvg } from './icons.js?v=22';
+import { BRAND_ICONS } from './brands.js?v=22';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=22';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -435,16 +435,23 @@ function renderEdgeInspector(e) {
     </div>
     <div class="insp-section">
       <h3>経由点（ベンド）</h3>
-      <div class="field" style="font-size:11px;color:var(--text-faint)">線上の＋点をドラッグで曲げる / 点をダブルクリックで削除</div>
-      <div class="btn-row"><button class="chip-btn" data-eop="clearpts"${(e.points && e.points.length) ? '' : ' disabled'}>経由点をクリア${(e.points && e.points.length) ? `（${e.points.length}）` : ''}</button></div>
+      <div class="field" style="font-size:11px;color:var(--text-faint)">線上の＋点をドラッグで曲げる / 点をダブルクリックで削除。線を選んでラベルをドラッグで位置調整</div>
+      <div class="btn-row">
+        <button class="chip-btn" data-eop="clearpts"${(e.points && e.points.length) ? '' : ' disabled'}>経由点をクリア${(e.points && e.points.length) ? `（${e.points.length}）` : ''}</button>
+        <button class="chip-btn" data-eop="labelreset"${(e.lx || e.ly) ? '' : ' disabled'}>ラベル位置をリセット</button>
+      </div>
     </div>
     <div class="insp-section">
       <h3>操作</h3>
       <div class="btn-row"><button class="chip-btn danger" data-op="del">🗑 削除</button></div>
     </div>`;
 
-  const clr = inspBody.querySelector('[data-eop="clearpts"]');
-  if (clr) clr.addEventListener('click', () => { editor.applyPatch({ points: [] }); editor.emit('select', editor.sel); });
+  inspBody.querySelectorAll('[data-eop]').forEach((btn) => btn.addEventListener('click', () => {
+    if (btn.hasAttribute('disabled')) return;
+    if (btn.dataset.eop === 'clearpts') editor.applyPatch({ points: [] });
+    else if (btn.dataset.eop === 'labelreset') editor.applyPatch({ lx: 0, ly: 0 });
+    editor.emit('select', editor.sel);
+  }));
   const lab = $('#e-label', inspBody);
   lab.addEventListener('input', () => editor.applyPatch({ label: lab.value }, false));
   lab.addEventListener('change', () => editor.commit());
