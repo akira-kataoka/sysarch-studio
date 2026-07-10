@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=12';
-import { Editor } from './editor.js?v=12';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=12';
-import { iconSvg } from './icons.js?v=12';
-import { BRAND_ICONS } from './brands.js?v=12';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=12';
+import { initBackground } from './background.js?v=13';
+import { Editor } from './editor.js?v=13';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=13';
+import { iconSvg } from './icons.js?v=13';
+import { BRAND_ICONS } from './brands.js?v=13';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=13';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -297,6 +297,9 @@ function renderNodeInspector(n) {
       ${isLogo ? `<div class="field"><label>ロゴ画像</label><div class="btn-row">
         <button class="chip-btn" data-op="img">🖼 画像を選択</button>
         ${n.img ? '<button class="chip-btn" data-op="img-clear">画像を消す</button>' : ''}
+      </div></div>
+      <div class="field"><label>表示</label><div class="btn-row">
+        <button class="chip-btn${n.compact ? ' is-active' : ''}" data-op="compact">▪ コンパクト（アイコンのみ）</button>
       </div></div>` : ''}
     </div>
     <div class="insp-section">
@@ -399,6 +402,7 @@ function bindOps() {
     else if (b.dataset.op === 'front') editor.bringToFront();
     else if (b.dataset.op === 'back') editor.sendToBack();
     else if (b.dataset.op === 'fitzone') { editor.fitZoneToChildren(); toast('枠を中身に合わせました'); }
+    else if (b.dataset.op === 'compact') { const n = editor.selected(); const c = !n.compact; editor.applyPatch({ compact: c, w: c ? 76 : 170, h: c ? 82 : 56 }); editor.emit('select', editor.sel); }
   }));
 }
 
@@ -723,6 +727,53 @@ backdrop.addEventListener('click', closeDrawers);
 $('#palette-body').addEventListener('click', (e) => { if (e.target.closest('.pal-item')) setTimeout(closeDrawers, 80); });
 // pulse the edit FAB when a node/edge is selected
 editor.on('select', (sel) => $('#fab-insp').classList.toggle('has-sel', !!(sel && sel.kind)));
+
+/* ---------------- context menu (right-click / long-press) ---------------- */
+const ctxMenu = $('#context-menu');
+function showContextMenu(clientX, clientY) {
+  const multi = editor.selNodes.size > 1;
+  const isNode = editor.sel.kind === 'node';
+  const items = [];
+  if (isNode && !multi) items.push(['dup', '⧉ 複製'], ['front', '⬆ 前面へ'], ['back', '⬇ 背面へ']);
+  if (multi) items.push(['al-left', '⇤ 左揃え'], ['al-top', '⤒ 上揃え'], ['di-h', '⇔ 水平等間隔']);
+  if (isNode || multi || editor.sel.kind === 'edge') items.push(['del', '🗑 削除']);
+  if (!items.length) return;
+  ctxMenu.innerHTML = items.map(([a, l]) => `<button data-ctx="${a}">${l}</button>`).join('');
+  ctxMenu.hidden = false;
+  const mw = 170, mh = items.length * 38 + 12;
+  ctxMenu.style.left = Math.min(clientX, innerWidth - mw - 8) + 'px';
+  ctxMenu.style.top = Math.min(clientY, innerHeight - mh - 8) + 'px';
+}
+const hideContextMenu = () => { ctxMenu.hidden = true; };
+ctxMenu.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ctx]'); if (!b) return;
+  const a = b.dataset.ctx;
+  if (a === 'dup') editor.duplicateSelected();
+  else if (a === 'front') editor.bringToFront();
+  else if (a === 'back') editor.sendToBack();
+  else if (a === 'del') editor.deleteSelected();
+  else if (a === 'al-left') editor.alignSelected('left');
+  else if (a === 'al-top') editor.alignSelected('top');
+  else if (a === 'di-h') editor.distributeSelected('h');
+  hideContextMenu();
+});
+svg.addEventListener('contextmenu', (e) => {
+  const nodeEl = e.target.closest('.node-g'), edgeEl = e.target.closest('.edge-g');
+  if (nodeEl) { e.preventDefault(); if (!editor.selNodes.has(nodeEl.dataset.id)) editor.select('node', nodeEl.dataset.id); showContextMenu(e.clientX, e.clientY); }
+  else if (edgeEl) { e.preventDefault(); editor.select('edge', edgeEl.dataset.id); showContextMenu(e.clientX, e.clientY); }
+});
+document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#context-menu')) hideContextMenu(); }, true);
+addEventListener('blur', hideContextMenu);
+// long-press on touch opens the same menu
+let lpTimer = null, lpStart = null;
+svg.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch') return;
+  const nodeEl = e.target.closest('.node-g'); if (!nodeEl) return;
+  lpStart = { x: e.clientX, y: e.clientY, id: nodeEl.dataset.id };
+  lpTimer = setTimeout(() => { if (!editor.selNodes.has(lpStart.id)) editor.select('node', lpStart.id); showContextMenu(lpStart.x, lpStart.y); lpTimer = null; }, 500);
+});
+svg.addEventListener('pointermove', (e) => { if (lpTimer && lpStart && Math.hypot(e.clientX - lpStart.x, e.clientY - lpStart.y) > 8) { clearTimeout(lpTimer); lpTimer = null; } });
+svg.addEventListener('pointerup', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
 
 /* ---------------- boot ---------------- */
 if (!editor.loadAutosave()) {

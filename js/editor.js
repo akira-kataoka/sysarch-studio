@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=12';
-import { typeInfo } from './nodes.js?v=12';
-import { BRAND_ICONS } from './brands.js?v=12';
+import { ICONS } from './icons.js?v=13';
+import { typeInfo } from './nodes.js?v=13';
+import { BRAND_ICONS } from './brands.js?v=13';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -333,6 +333,27 @@ export class Editor {
         g.appendChild(el('circle', { cx: 16, cy: cy + 4, r: 2.6, fill: n.color }));
         g.appendChild(text(26, cy + 8, ln, 'node-sub', C.nodeSub));
       });
+      return this._withPorts(g, n);
+    }
+
+    // ---- compact logo tile: icon-only square + small caption (for dense diagrams) ----
+    if (info.logo && n.compact) {
+      const bi = BRAND_ICONS[n.type];
+      const s = 60, tx = (n.w - s) / 2, ty = 2;
+      if (n.img) {
+        g.appendChild(el('rect', { x: tx, y: ty, width: s, height: s, rx: 12, fill: '#ffffff', filter: 'url(#node-shadow)' }));
+        const im = el('image', { x: tx + 4, y: ty + 4, width: s - 8, height: s - 8, preserveAspectRatio: 'xMidYMid meet' });
+        im.setAttribute('href', n.img); im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', n.img);
+        g.appendChild(im);
+      } else if (bi) {
+        g.appendChild(el('rect', { x: tx, y: ty, width: s, height: s, rx: 12, fill: bi.hex, filter: 'url(#node-shadow)' }));
+        const ic = el('g', { transform: `translate(${tx + (s - 34) / 2} ${ty + (s - 34) / 2}) scale(${34 / 24})`, fill: '#ffffff' });
+        ic.innerHTML = `<path d="${bi.path}"/>`; g.appendChild(ic);
+      } else {
+        g.appendChild(el('rect', { x: tx, y: ty, width: s, height: s, rx: 12, fill: n.color, filter: 'url(#node-shadow)' }));
+        const in2 = text(n.w / 2, ty + s / 2 + 7, initials(n.label), 'node-title', '#ffffff'); in2.setAttribute('text-anchor', 'middle'); in2.setAttribute('font-size', '20'); g.appendChild(in2);
+      }
+      if (n.label) { const cap = text(n.w / 2, ty + s + 15, n.label, 'node-sub', C.nodeSub); cap.setAttribute('text-anchor', 'middle'); g.appendChild(cap); }
       return this._withPorts(g, n);
     }
 
