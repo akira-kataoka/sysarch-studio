@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=16';
-import { Editor } from './editor.js?v=16';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=16';
-import { iconSvg } from './icons.js?v=16';
-import { BRAND_ICONS } from './brands.js?v=16';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=16';
+import { initBackground } from './background.js?v=17';
+import { Editor } from './editor.js?v=17';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=17';
+import { iconSvg } from './icons.js?v=17';
+import { BRAND_ICONS } from './brands.js?v=17';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=17';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -91,11 +91,13 @@ buildThemeMenu();
 initBackground().then((b) => { bg = b; const t = THEMES.find((x) => x.id === themeId) || THEMES[0]; bg.setPalette(t.pt, t.ln, t.mode); });
 
 /* ---------------- palette ---------------- */
+let collapsedSet;
+try { const s = JSON.parse(localStorage.getItem('sysarch:palcollapse')); collapsedSet = new Set(Array.isArray(s) ? s : ['brand']); } catch { collapsedSet = new Set(['brand']); }
 function buildPalette() {
   const body = $('#palette-body');
   body.innerHTML = GROUPS.map((g) => `
-    <div class="pal-group" data-group="${g.id}">
-      <div class="pal-group-title" style="--gcolor:${g.color}">${g.title}</div>
+    <div class="pal-group${collapsedSet.has(g.id) ? ' collapsed' : ''}" data-group="${g.id}">
+      <div class="pal-group-title" style="--gcolor:${g.color}"><span class="pg-name">${g.title}</span><span class="pg-count">${g.types.length}</span><span class="pg-chev">▾</span></div>
       <div class="pal-items">
         ${g.types.map((t) => `
           <div class="pal-item" draggable="true" data-type="${t.id}" style="--ncolor:${t.color}" title="${t.label}">
@@ -130,6 +132,13 @@ function buildPalette() {
       toast(`「${typeInfo(type).label}」を追加`);
     });
   });
+  // collapse / expand a group by clicking its header
+  body.querySelectorAll('.pal-group-title').forEach((t) => t.addEventListener('click', () => {
+    const grp = t.closest('.pal-group'); const id = grp.dataset.group;
+    grp.classList.toggle('collapsed');
+    if (collapsedSet.has(id)) collapsedSet.delete(id); else collapsedSet.add(id);
+    try { localStorage.setItem('sysarch:palcollapse', JSON.stringify([...collapsedSet])); } catch {}
+  }));
 }
 buildPalette();
 
@@ -143,6 +152,8 @@ $('#palette-search').addEventListener('input', (e) => {
       if (hit) visible++;
     });
     grp.style.display = visible ? '' : 'none';
+    if (q) grp.classList.remove('collapsed');                                  // expand while searching
+    else grp.classList.toggle('collapsed', collapsedSet.has(grp.dataset.group)); // restore persisted state
   });
 });
 
