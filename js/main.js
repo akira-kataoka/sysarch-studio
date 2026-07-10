@@ -43,6 +43,29 @@ function pickImage(cb) {
   inp.click();
 }
 
+/* ---------------- share link (diagram encoded in URL hash) ---------------- */
+const b64urlEncode = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const b64urlDecode = (str) => { const t = str.replace(/-/g, '+').replace(/_/g, '/'); const s = atob(t); const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; };
+async function gzip(str) { const cs = new CompressionStream('gzip'); const w = cs.writable.getWriter(); w.write(new TextEncoder().encode(str)); w.close(); return new Uint8Array(await new Response(cs.readable).arrayBuffer()); }
+async function gunzip(bytes) { const ds = new DecompressionStream('gzip'); const w = ds.writable.getWriter(); w.write(bytes); w.close(); return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer()); }
+
+async function shareLink() {
+  if (!Object.keys(editor.state.nodes).length) { toast('図が空です', 'err'); return; }
+  if (!window.CompressionStream) { toast('この環境は共有リンク非対応（JSON保存をご利用ください）', 'err'); return; }
+  const enc = b64urlEncode(await gzip(JSON.stringify(editor.toJSON())));
+  const url = location.origin + location.pathname + '#d=' + enc;
+  if (url.length > 32000) { toast('図が大きすぎます（画像を減らすかJSON保存を）', 'err'); return; }
+  history.replaceState(null, '', url);
+  try { await navigator.clipboard.writeText(url); toast('共有リンクをコピーしました', 'ok'); }
+  catch { toast('URLに反映しました（コピー不可の環境です）', 'ok'); }
+}
+async function tryLoadFromHash() {
+  const m = /^#d=(.+)$/.exec(location.hash || '');
+  if (!m || !window.DecompressionStream) return false;
+  try { editor.loadJSON(JSON.parse(await gunzip(b64urlDecode(m[1])))); return true; }
+  catch (e) { console.warn('share load failed', e); return false; }
+}
+
 /* ---------------- theme + background ---------------- */
 let bg = { setTheme() {}, setPalette() {} };
 
@@ -251,6 +274,7 @@ $('#export-menu').addEventListener('click', async (e) => {
     else if (kind === 'png4') { await exportPNG(editor, 4, o); toast('PNG (4x) を書き出しました', 'ok'); }
     else if (kind === 'pdf') { await exportPDF(editor, 2, o); toast('PDF を書き出しました（背景あり）', 'ok'); }
     else if (kind === 'clipboard') { await copyPNG(editor, 2, o); toast('PNG をクリップボードにコピー', 'ok'); }
+    else if (kind === 'share') { await shareLink(); }
   } catch (err) { console.error(err); toast('書き出しに失敗: ' + err.message, 'err'); }
 });
 
@@ -920,9 +944,9 @@ svg.addEventListener('pointermove', (e) => { if (lpTimer && lpStart && Math.hypo
 svg.addEventListener('pointerup', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
 
 /* ---------------- boot ---------------- */
-if (!editor.loadAutosave()) {
-  editor.loadJSON(demoDiagram());
-} else {
-  editor.fitView();
-}
-editor.select(null, null);
+(async () => {
+  if (await tryLoadFromHash()) { toast('共有リンクの図を読み込みました', 'ok'); }
+  else if (!editor.loadAutosave()) { editor.loadJSON(demoDiagram()); }
+  else { editor.fitView(); }
+  editor.select(null, null);
+})();
