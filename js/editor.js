@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=27';
-import { typeInfo } from './nodes.js?v=27';
-import { BRAND_ICONS } from './brands.js?v=27';
+import { ICONS } from './icons.js?v=28';
+import { typeInfo } from './nodes.js?v=28';
+import { BRAND_ICONS } from './brands.js?v=28';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -86,7 +86,7 @@ export class Editor {
     const info = typeInfo(type);
     const shape = info.shape || 'card';
     const id = this._id('n');
-    const [w, h] = ({ group: [320, 200], band: [460, 300], banner: [320, 52], plain: [150, 46], text: [150, 30], list: [200, 120] }[shape]) || [NODE_W, NODE_H];
+    const [w, h] = ({ group: [320, 200], band: [460, 300], banner: [320, 52], plain: [150, 46], text: [150, 30], list: [200, 120], table: [232, 150], uml: [210, 150] }[shape]) || [NODE_W, NODE_H];
     const backLayer = shape === 'group' || shape === 'band';
     const node = {
       id, type, x: snap(x - w / 2), y: snap(y - h / 2), w, h,
@@ -94,6 +94,11 @@ export class Editor {
       shape,
     };
     if (opts.img) node.img = opts.img;
+    // structured shapes drop in with sample content so their layout is obvious
+    if (node.sub === '') {
+      const defs = { list: '項目1\n項目2\n項目3', table: '# id | bigint\nname | varchar(255)\nstatus | int\ncreated_at | datetime', uml: '- id: number\n- name: string\n--\n+ create(): void\n+ update(): void' };
+      if (defs[shape]) node.sub = defs[shape];
+    }
     this.state.nodes[id] = node;
     if (backLayer) this.state.order.unshift(id); else this.state.order.push(id);
     this._pushHistory();
@@ -363,6 +368,67 @@ export class Editor {
         const cy = headerH + 6 + i * lineH;
         g.appendChild(el('circle', { cx: 16, cy: cy + 4, r: 2.6, fill: n.color }));
         g.appendChild(text(26, cy + 8, ln, 'node-sub', C.nodeSub));
+      });
+      return this._withPorts(g, n);
+    }
+
+    // ---- table / ER entity: header + "名前 | 型" rows with separators & key markers ----
+    if (shape === 'table') {
+      const rows = String(n.sub || '').split('\n').filter((x) => x.trim() !== '');
+      const headerH = 32, rowH = 25, padB = 6;
+      n.h = headerH + Math.max(1, rows.length) * rowH + padB;
+      const hasCols = rows.some((r) => r.includes('|'));
+      const colX = Math.round(n.w * 0.56);
+      g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 10, fill: C.nodeBg, stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.6, filter: 'url(#node-shadow)' }));
+      g.appendChild(el('rect', { class: 'grp-head', width: n.w, height: headerH, rx: 10, fill: mix(n.color, 20) }));
+      g.appendChild(el('rect', { class: 'grp-head', y: headerH - 10, width: n.w, height: 10, fill: mix(n.color, 20) }));
+      g.appendChild(text(12, 21, n.label, 'node-title', C.nodeText)).setAttribute('data-maxw', n.w - 24);
+      if (hasCols) g.appendChild(el('line', { x1: colX, y1: headerH, x2: colX, y2: n.h, stroke: mix(n.color, 22), 'stroke-width': 1 }));
+      rows.forEach((raw, i) => {
+        const top = headerH + i * rowH;
+        if (i > 0) g.appendChild(el('line', { x1: 0, y1: top, x2: n.w, y2: top, stroke: mix(n.color, 18), 'stroke-width': 1 }));
+        const ty = top + rowH / 2 + 4;
+        const cells = raw.split('|').map((s) => s.trim());
+        const key = /^[*#]/.test(cells[0]);
+        if (key) cells[0] = cells[0].replace(/^[*#]\s*/, '');
+        if (key) g.appendChild(el('circle', { cx: 9, cy: top + rowH / 2, r: 3, fill: '#ffd166' }));
+        const lx = key ? 18 : 12;
+        const nameT = text(lx, ty, cells[0] || '', 'node-sub', C.nodeText);
+        if (key) nameT.setAttribute('font-weight', '600');
+        nameT.setAttribute('data-maxw', (hasCols ? colX : n.w) - lx - 6);
+        g.appendChild(nameT);
+        if (cells.length > 1) {
+          const t2 = text(colX + 8, ty, cells.slice(1).join(' | '), 'node-sub', C.nodeSub);
+          t2.setAttribute('data-maxw', n.w - colX - 14);
+          g.appendChild(t2);
+        }
+      });
+      return this._withPorts(g, n);
+    }
+
+    // ---- UML class / 機能: name header + compartments split by a "--" line ----
+    if (shape === 'uml') {
+      const comps = [[]];
+      String(n.sub || '').split('\n').forEach((l) => {
+        const t = l.trim();
+        if (/^-{2,}$/.test(t)) comps.push([]);
+        else if (t !== '') comps[comps.length - 1].push(t);
+      });
+      const usable = comps.filter((c) => c.length);
+      const headerH = 32, lineH = 20, padT = 6, padBt = 4;
+      const totalLines = usable.reduce((a, c) => a + c.length, 0);
+      n.h = headerH + usable.length * (padT + padBt) + totalLines * lineH + 4;
+      g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 8, fill: C.nodeBg, stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.6, filter: 'url(#node-shadow)' }));
+      g.appendChild(el('rect', { class: 'grp-head', width: n.w, height: headerH, rx: 8, fill: mix(n.color, 20) }));
+      g.appendChild(el('rect', { class: 'grp-head', y: headerH - 8, width: n.w, height: 8, fill: mix(n.color, 20) }));
+      const title = text(n.w / 2, 21, n.label, 'node-title', C.nodeText); title.setAttribute('text-anchor', 'middle'); title.setAttribute('data-maxw', n.w - 20);
+      g.appendChild(title);
+      let y = headerH;
+      usable.forEach((c, ci) => {
+        if (ci > 0) g.appendChild(el('line', { x1: 0, y1: y, x2: n.w, y2: y, stroke: mix(n.color, 22), 'stroke-width': 1 }));
+        y += padT;
+        c.forEach((ln) => { g.appendChild(text(12, y + 13, ln, 'node-sub', C.nodeSub)).setAttribute('data-maxw', n.w - 22); y += lineH; });
+        y += padBt;
       });
       return this._withPorts(g, n);
     }

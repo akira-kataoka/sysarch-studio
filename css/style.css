@@ -339,6 +339,9 @@ kbd {
 :root[data-theme="light"] .field input, :root[data-theme="light"] .field textarea, :root[data-theme="light"] .field select { background: rgba(20,30,60,0.03); }
 .field textarea { height: auto; min-height: 60px; padding: 8px 11px; resize: vertical; line-height: 1.5; }
 .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field textarea[id="f-sub"] { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; }
+.field-hint { margin-top: 5px; font-size: 10.5px; color: var(--text-faint); line-height: 1.5; }
+.field label code, .field-hint code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; padding: 1px 4px; border-radius: 4px; background: var(--accent-soft); color: var(--text-dim); }
 
 .swatches { display: flex; flex-wrap: wrap; gap: 7px; }
 .swatch { width: 26px; height: 26px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: transform .1s; }
