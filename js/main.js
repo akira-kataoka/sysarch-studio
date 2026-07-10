@@ -1,10 +1,10 @@
 // App wiring: palette, toolbar, inspector, keyboard, minimap, demo, export.
-import { initBackground } from './background.js?v=28';
-import { Editor } from './editor.js?v=28';
-import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=28';
-import { iconSvg } from './icons.js?v=28';
-import { BRAND_ICONS } from './brands.js?v=28';
-import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=28';
+import { initBackground } from './background.js?v=29';
+import { Editor } from './editor.js?v=29';
+import { GROUPS, TYPE_MAP, PALETTE_COLORS, typeInfo } from './nodes.js?v=29';
+import { iconSvg } from './icons.js?v=29';
+import { BRAND_ICONS } from './brands.js?v=29';
+import { exportSVG, exportPNG, copyPNG, exportPDF } from './export.js?v=29';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -378,9 +378,10 @@ function renderNodeInspector(n) {
   const isList = n.shape === 'list';
   const isTable = n.shape === 'table';
   const isUml = n.shape === 'uml';
+  const isLegend = n.shape === 'legend';
   const isGroup = n.shape === 'group';
   const isLogo = info.logo || n.img;
-  const titleLabel = isTable ? 'テーブル名' : (isUml ? 'クラス / 機能名' : (isList ? 'タイトル' : 'ラベル'));
+  const titleLabel = isTable ? 'テーブル名' : (isUml ? 'クラス / 機能名' : ((isList || isLegend) ? 'タイトル' : 'ラベル'));
   const labelField = isText
     ? `<textarea id="f-label" rows="2" placeholder="テキスト（改行可）">${esc(n.label)}</textarea>`
     : `<input id="f-label" type="text" value="${esc(n.label)}" />`;
@@ -389,6 +390,7 @@ function renderNodeInspector(n) {
   else if (isTable) subField = `<div class="field"><label>行（1行に1つ・<code>列名 | 型</code>）</label><textarea id="f-sub" rows="6" placeholder="# id | bigint&#10;name | varchar(255)&#10;created_at | datetime">${esc(n.sub)}</textarea><div class="field-hint">先頭に <code>#</code> または <code>*</code> で主キー（●印）。<code>|</code> で列を区切り。</div></div>`;
   else if (isUml) subField = `<div class="field"><label>内容（<code>--</code> で区画を分割）</label><textarea id="f-sub" rows="6" placeholder="- id: number&#10;- name: string&#10;--&#10;+ create(): void&#10;+ update(): void">${esc(n.sub)}</textarea><div class="field-hint">属性 → <code>--</code> → メソッド。行頭 <code>+ - #</code> は可視性の目印に。</div></div>`;
   else if (isList) subField = `<div class="field"><label>項目（1行に1つ）</label><textarea id="f-sub" rows="5" placeholder="社内共有&#10;顧客フォルダ&#10;外部共有フォルダ">${esc(n.sub)}</textarea></div>`;
+  else if (isLegend) subField = `<div class="field"><label>項目（1行に1つ・<code>種類 | 意味</code>）</label><textarea id="f-sub" rows="5" placeholder="solid|同期 / API 呼び出し&#10;dashed|非同期 / イベント&#10;dotted|バッチ / 日次連携&#10;arrow|データの流れ方向">${esc(n.sub)}</textarea><div class="field-hint">種類は <code>solid</code>（実線）/ <code>dashed</code>（破線）/ <code>dotted</code>（点線）/ <code>arrow</code>（矢印）。</div></div>`;
   else subField = `<div class="field"><label>補足（サブテキスト）</label><input id="f-sub" type="text" value="${esc(n.sub)}" placeholder="例: Nginx / t3.medium" /></div>`;
   inspBody.innerHTML = `
     <div class="insp-section">
@@ -686,6 +688,7 @@ function demoBuilder() {
     logo: (type, x, y, label) => { const b = typeInfo(type); const o = { id: nid(), type, x, y, w: 170, h: 56, label: label ?? b.label, sub: '', color: b.color, shape: 'card' }; front.push(o); return o; },
     box: (x, y, label, w = 120) => { const o = { id: nid(), type: 'step', x, y, w, h: 44, label, sub: '', color: '#94a3b8', shape: 'plain' }; front.push(o); return o; },
     list: (x, y, label, items, c = '#5b9dff') => { const o = { id: nid(), type: 'list', x, y, w: 180, h: 120, label, sub: items.join('\n'), color: c, shape: 'list' }; front.push(o); return o; },
+    legend: (x, y, rows, label = '凡例', c = '#94a3b8') => { const o = { id: nid(), type: 'legend', x, y, w: 232, h: 128, label, sub: rows.join('\n'), color: c, shape: 'legend' }; front.push(o); return o; },
     table: (x, y, label, rows, c = '#43d19e') => { const o = { id: nid(), type: 'table', x, y, w: 224, h: 150, label, sub: rows.join('\n'), color: c, shape: 'table' }; front.push(o); return o; },
     uml: (x, y, label, body, c = '#7c5cff') => { const o = { id: nid(), type: 'uml', x, y, w: 214, h: 150, label, sub: body.join('\n'), color: c, shape: 'uml' }; front.push(o); return o; },
     txt: (x, y, label) => { const o = { id: nid(), type: 'text', x, y, w: 120, h: 24, label, sub: '', color: '#94a3b8', shape: 'text' }; front.push(o); return o; },
@@ -835,6 +838,7 @@ function demoIntegration() {
   const logo = (x, y, type, label) => { const b = typeInfo(type); const o = { id: nid(), type, x, y, w: 170, h: 56, label: label ?? b.label, sub: '', color: b.color, shape: 'card' }; front.push(o); return o; };
   const list = (x, y, label, items, c = '#4dd0e1') => { const o = { id: nid(), type: 'list', x, y, w: 178, h: 120, label, sub: items.join('\n'), color: c, shape: 'list' }; front.push(o); return o; };
   const txt = (x, y, label) => { const o = { id: nid(), type: 'text', x, y, w: 120, h: 24, label, sub: '', color: '#94a3b8', shape: 'text' }; front.push(o); return o; };
+  const legend = (x, y, rows, label = '凡例', c = '#94a3b8') => { const o = { id: nid(), type: 'legend', x, y, w: 232, h: 128, label, sub: rows.join('\n'), color: c, shape: 'legend' }; front.push(o); return o; };
 
   banner(40, 18, 400, '全社DX システム連携・組立図', '#4d8dff');
 
@@ -885,6 +889,9 @@ function demoIntegration() {
   zone(1064, 420, 240, 128, '経営判断 / BI', '#ffb454');
   logo(1080, 452, 'tableau', 'Tableau');
   txt(1080, 520, 'アカウント毎の見込み金額');
+
+  // ---- 凡例（線の意味） ----
+  legend(40, 584, ['solid|通常連携 / 参照', 'dashed|登録・取込', 'dotted|バッチ / 分析連携', 'arrow|データの流れ']);
 
   const edges = []; let e = 0;
   const E = (from, to, label = '', style = 'solid', dir = 'forward') => edges.push({ id: 'e' + (++e), from: from.id, to: to.id, label, style, dir, route: 'orthogonal', color: '' });

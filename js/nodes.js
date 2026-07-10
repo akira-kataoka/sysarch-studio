@@ -1,5 +1,5 @@
 // Node type catalog. Grouped for the palette; each type has an icon + accent color.
-import { BRAND_ICONS } from './brands.js?v=28';
+import { BRAND_ICONS } from './brands.js?v=29';
 
 // brand tiles are generated from the (CC0) Simple Icons set; add icons in brands.js to grow this list
 const BRAND_TYPES = Object.entries(BRAND_ICONS).map(([id, b]) => ({ id, label: b.title, color: b.hex, logo: true }));
@@ -82,6 +82,7 @@ export const GROUPS = [
       { id: 'step', label: '処理ボックス', icon: 'box', color: '#94a3b8', shape: 'plain' },
       { id: 'table', label: 'テーブル定義 / ER', icon: 'database', color: '#43d19e', shape: 'table' },
       { id: 'uml', label: 'クラス / 機能一覧', icon: 'box', color: '#7c5cff', shape: 'uml' },
+      { id: 'legend', label: '凡例（線の意味）', icon: 'file', color: '#94a3b8', shape: 'legend' },
       { id: 'list', label: '箇条書き', icon: 'file', color: '#5b9dff', shape: 'list' },
       { id: 'text', label: 'テキスト', icon: 'file', color: '#94a3b8', shape: 'text' },
       { id: 'group', label: 'グループ枠', icon: 'package', color: '#94a3b8', shape: 'group' },

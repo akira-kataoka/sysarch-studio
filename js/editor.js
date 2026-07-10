@@ -1,7 +1,7 @@
 // SVG system-architecture editor: nodes, edges, pan/zoom, linking, selection, history.
-import { ICONS } from './icons.js?v=28';
-import { typeInfo } from './nodes.js?v=28';
-import { BRAND_ICONS } from './brands.js?v=28';
+import { ICONS } from './icons.js?v=29';
+import { typeInfo } from './nodes.js?v=29';
+import { BRAND_ICONS } from './brands.js?v=29';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 24;      // dot spacing
@@ -86,7 +86,7 @@ export class Editor {
     const info = typeInfo(type);
     const shape = info.shape || 'card';
     const id = this._id('n');
-    const [w, h] = ({ group: [320, 200], band: [460, 300], banner: [320, 52], plain: [150, 46], text: [150, 30], list: [200, 120], table: [232, 150], uml: [210, 150] }[shape]) || [NODE_W, NODE_H];
+    const [w, h] = ({ group: [320, 200], band: [460, 300], banner: [320, 52], plain: [150, 46], text: [150, 30], list: [200, 120], table: [232, 150], uml: [210, 150], legend: [232, 128] }[shape]) || [NODE_W, NODE_H];
     const backLayer = shape === 'group' || shape === 'band';
     const node = {
       id, type, x: snap(x - w / 2), y: snap(y - h / 2), w, h,
@@ -96,7 +96,7 @@ export class Editor {
     if (opts.img) node.img = opts.img;
     // structured shapes drop in with sample content so their layout is obvious
     if (node.sub === '') {
-      const defs = { list: '項目1\n項目2\n項目3', table: '# id | bigint\nname | varchar(255)\nstatus | int\ncreated_at | datetime', uml: '- id: number\n- name: string\n--\n+ create(): void\n+ update(): void' };
+      const defs = { list: '項目1\n項目2\n項目3', table: '# id | bigint\nname | varchar(255)\nstatus | int\ncreated_at | datetime', uml: '- id: number\n- name: string\n--\n+ create(): void\n+ update(): void', legend: 'solid|同期 / API 呼び出し\ndashed|非同期 / イベント\ndotted|バッチ / 日次連携\narrow|データの流れ方向' };
       if (defs[shape]) node.sub = defs[shape];
     }
     this.state.nodes[id] = node;
@@ -429,6 +429,31 @@ export class Editor {
         y += padT;
         c.forEach((ln) => { g.appendChild(text(12, y + 13, ln, 'node-sub', C.nodeSub)).setAttribute('data-maxw', n.w - 22); y += lineH; });
         y += padBt;
+      });
+      return this._withPorts(g, n);
+    }
+
+    // ---- legend / 凡例: titled box; each row "style|text" shows a line swatch + meaning ----
+    if (shape === 'legend') {
+      const rows = String(n.sub || '').split('\n').filter((x) => x.trim() !== '');
+      const headerH = 30, rowH = 22, padB = 10, swX = 14, swW = 34, gap = 12;
+      n.h = headerH + Math.max(1, rows.length) * rowH + padB;
+      g.appendChild(el('rect', { class: 'node-card', width: n.w, height: n.h, rx: 10, fill: C.nodeBg, stroke: n.color, 'stroke-width': 1.4, 'stroke-opacity': 0.6, filter: 'url(#node-shadow)' }));
+      g.appendChild(el('rect', { class: 'grp-head', width: n.w, height: headerH, rx: 10, fill: mix(n.color, 16) }));
+      g.appendChild(el('rect', { class: 'grp-head', y: headerH - 10, width: n.w, height: 10, fill: mix(n.color, 16) }));
+      g.appendChild(text(12, 20, n.label, 'node-title', C.nodeText));
+      rows.forEach((raw, i) => {
+        const cy = headerH + 4 + i * rowH + rowH / 2;
+        const bar = raw.indexOf('|');
+        const tok = (bar >= 0 ? raw.slice(0, bar) : 'solid').trim().toLowerCase();
+        const cap = (bar >= 0 ? raw.slice(bar + 1) : raw).trim();
+        const dash = tok === 'dashed' ? '7 5' : tok === 'dotted' ? '1.5 4' : null;
+        const x2 = tok === 'arrow' ? swX + swW - 7 : swX + swW;
+        const ln = el('line', { x1: swX, y1: cy, x2, y2: cy, stroke: n.color, 'stroke-width': 2.4, 'stroke-linecap': 'round' });
+        if (dash) ln.setAttribute('stroke-dasharray', dash);
+        g.appendChild(ln);
+        if (tok === 'arrow') g.appendChild(el('path', { d: `M${swX + swW - 8} ${cy - 4.5} L${swX + swW} ${cy} L${swX + swW - 8} ${cy + 4.5} Z`, fill: n.color }));
+        g.appendChild(text(swX + swW + gap, cy + 4, cap, 'node-sub', C.nodeSub)).setAttribute('data-maxw', n.w - (swX + swW + gap) - 10);
       });
       return this._withPorts(g, n);
     }
