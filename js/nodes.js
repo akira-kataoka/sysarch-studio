@@ -1,5 +1,5 @@
 // Node type catalog. Grouped for the palette; each type has an icon + accent color.
-import { BRAND_ICONS } from './brands.js?v=29';
+import { BRAND_ICONS } from './brands.js?v=30';
 
 // brand tiles are generated from the (CC0) Simple Icons set; add icons in brands.js to grow this list
 const BRAND_TYPES = Object.entries(BRAND_ICONS).map(([id, b]) => ({ id, label: b.title, color: b.hex, logo: true }));

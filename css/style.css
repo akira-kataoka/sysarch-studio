@@ -149,6 +149,7 @@ body {
 /* ===== topbar ===== */
 .topbar {
   grid-area: top;
+  position: relative; z-index: 30;   /* keep toolbar dropdowns above the canvas/inspector (topbar is a stacking context via backdrop-filter) */
   display: flex; align-items: center; gap: 14px;
   padding: 0 12px;
   border-radius: var(--radius);
